@@ -2,6 +2,117 @@ function pairKey(team) {
   return [...team].sort().join("|");
 }
 
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = value;
+  return div.innerHTML;
+}
+
+const SEASON_STORAGE_KEY = "badmintonSeasonState";
+const SEASON_TTL_MS = 2 * 60 * 60 * 1000;
+
+function playersKey(players) {
+  return [...players].sort().join("|");
+}
+
+function loadSeason(players) {
+  const raw = localStorage.getItem(SEASON_STORAGE_KEY);
+  if (!raw) return null;
+
+  try {
+    const state = JSON.parse(raw);
+    if (state.key !== playersKey(players)) return null;
+    if (!state.updatedAt || Date.now() - state.updatedAt > SEASON_TTL_MS) {
+      clearSeason();
+      return null;
+    }
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+function newSeason(players) {
+  return {
+    key: playersKey(players),
+    players,
+    setNumber: 0,
+    cumulativeGames: Object.fromEntries(players.map((p) => [p, 0])),
+    history: [],
+    currentIndex: -1,
+    updatedAt: Date.now(),
+  };
+}
+
+function saveSeason(state) {
+  state.updatedAt = Date.now();
+  localStorage.setItem(SEASON_STORAGE_KEY, JSON.stringify(state));
+}
+
+function clearSeason() {
+  localStorage.removeItem(SEASON_STORAGE_KEY);
+}
+
+const INPUTS_STORAGE_KEY = "badmintonInputs";
+const DEFAULT_ATTEMPTS = 400;
+
+function saveInputs(playersRaw) {
+  localStorage.setItem(INPUTS_STORAGE_KEY, JSON.stringify({ playersRaw }));
+}
+
+function loadInputs() {
+  const raw = localStorage.getItem(INPUTS_STORAGE_KEY);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+const KNOWN_PLAYERS_KEY = "badmintonKnownPlayers";
+
+function loadKnownPlayers() {
+  const raw = localStorage.getItem(KNOWN_PLAYERS_KEY);
+  if (!raw) return [];
+
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberKnownPlayers(players) {
+  const known = loadKnownPlayers();
+  for (const p of players) {
+    if (!known.includes(p)) known.push(p);
+  }
+  localStorage.setItem(KNOWN_PLAYERS_KEY, JSON.stringify(known));
+}
+
+function forgetKnownPlayer(name) {
+  const known = loadKnownPlayers().filter((p) => p !== name);
+  localStorage.setItem(KNOWN_PLAYERS_KEY, JSON.stringify(known));
+}
+
+function renderKnownPlayerChips() {
+  const container = document.getElementById("knownPlayersChips");
+  const known = loadKnownPlayers();
+  container.innerHTML = known
+    .map(
+      (name) => `
+      <span class="chip">
+        <button type="button" class="chip-add" data-name="${escapeHtml(name)}">${escapeHtml(name)}</button>
+        <button type="button" class="chip-remove" data-name="${escapeHtml(name)}" aria-label="Remove ${escapeHtml(name)}">×</button>
+      </span>
+    `
+    )
+    .join("");
+}
+
 function makeGameConfigs(players) {
   const configs = [];
 
@@ -25,8 +136,8 @@ function makeGameConfigs(players) {
   return configs;
 }
 
-function evaluateSchedule(schedule, players) {
-  const playerGames = new Map(players.map((p) => [p, 0]));
+function evaluateSchedule(schedule, players, initialGames) {
+  const playerGames = new Map(players.map((p) => [p, initialGames.get(p) || 0]));
   const partnerCount = new Map();
   const consecutive = new Map(players.map((p) => [p, 0]));
 
@@ -130,14 +241,15 @@ function calculateScore(game, playerGames, partnerCount, lastPlayed, consecutive
   return score;
 }
 
-function generateSchedule(players, attempts = 300) {
+function generateSchedule(players, attempts = 300, initialGames = null) {
   const configs = makeGameConfigs(players);
+  const startingGames = initialGames || new Map(players.map((p) => [p, 0]));
   let bestSchedule = [];
   let bestScore = Infinity;
 
   for (let run = 0; run < attempts; run += 1) {
     const schedule = [];
-    const playerGames = new Map(players.map((p) => [p, 0]));
+    const playerGames = new Map(players.map((p) => [p, startingGames.get(p) || 0]));
     const partnerCount = new Map();
     const lastPlayed = new Map(players.map((p) => [p, 0]));
     const consecutive = new Map(players.map((p) => [p, 0]));
@@ -205,7 +317,7 @@ function generateSchedule(players, attempts = 300) {
       gameNumber += 1;
     }
 
-    const finalScore = evaluateSchedule(schedule, players);
+    const finalScore = evaluateSchedule(schedule, players, startingGames);
     if (finalScore < bestScore) {
       bestScore = finalScore;
       bestSchedule = schedule;
@@ -215,7 +327,7 @@ function generateSchedule(players, attempts = 300) {
   return bestSchedule;
 }
 
-function renderSchedule(schedule, players) {
+function renderSchedule(schedule, players, seasonState) {
   const output = document.getElementById("output");
   const metaText = document.getElementById("metaText");
   const resetBtn = document.getElementById("resetColorsBtn");
@@ -243,13 +355,13 @@ function renderSchedule(schedule, players) {
       <div class="game-title">🏸 GAME ${idx + 1}</div>
       <div class="game-line teams">
         <span class="label">👥</span>
-        <span class="team">${team1[0]} + ${team1[1]}</span>
+        <span class="team">${escapeHtml(team1[0])} + ${escapeHtml(team1[1])}</span>
         <span class="vs">VS</span>
-        <span class="team">${team2[0]} + ${team2[1]}</span>
+        <span class="team">${escapeHtml(team2[0])} + ${escapeHtml(team2[1])}</span>
       </div>
       <div class="game-line rest-line">
         <span class="label">😴</span>
-        <span>Rest: ${rest.join(", ") || "None"}</span>
+        <span>Rest: ${escapeHtml(rest.join(", ") || "None")}</span>
       </div>
       <span class="status-pill">Tap to mark done</span>
     `;
@@ -277,28 +389,64 @@ function renderSchedule(schedule, players) {
     repeated += Math.max(0, count - 1);
   }
 
-  const statLines = players.map((p) => {
-    const games = playerGames.get(p) || 0;
-    const rests = schedule.length - games;
-    return `${p.padEnd(14, " ")} Games: ${String(games).padEnd(2, " ")} Rest: ${rests}`;
-  });
-
   const stat = document.createElement("div");
   stat.className = "stat";
-  stat.textContent = [
-    "📊 STATISTICS",
-    ...statLines,
-    "",
-    `🤝 Unique partnerships: ${uniquePartners}/${totalPossible}`,
-    `🔁 Repeated partnerships: ${repeated}`,
-  ].join("\n");
+
+  const setRows = players
+    .map((p) => {
+      const games = playerGames.get(p) || 0;
+      const rests = schedule.length - games;
+      return `<tr><td>${escapeHtml(p)}</td><td>${games}</td><td>${rests}</td></tr>`;
+    })
+    .join("");
+
+  let statHtml = `
+    <h3 class="stat-title">📊 This Set</h3>
+    <table class="stat-table">
+      <thead><tr><th>Player</th><th>Games</th><th>Rest</th></tr></thead>
+      <tbody>${setRows}</tbody>
+    </table>
+    <div class="stat-summary">
+      <span>🤝 Unique partnerships: ${uniquePartners}/${totalPossible}</span>
+      <span>🔁 Repeated partnerships: ${repeated}</span>
+    </div>
+  `;
+
+  if (seasonState) {
+    const seasonGames = Object.values(seasonState.cumulativeGames);
+    const seasonMax = Math.max(...seasonGames);
+    const seasonMin = Math.min(...seasonGames);
+    const seasonRows = players
+      .map((p) => {
+        const games = seasonState.cumulativeGames[p] || 0;
+        const behind = seasonMax - games;
+        return `<tr><td>${escapeHtml(p)}</td><td>${games}</td><td>${behind > 0 ? `owed ${behind}` : "—"}</td></tr>`;
+      })
+      .join("");
+
+    statHtml += `
+      <h3 class="stat-title">🏆 Season (set ${seasonState.setNumber})</h3>
+      <table class="stat-table">
+        <thead><tr><th>Player</th><th>Season games</th><th>Owed</th></tr></thead>
+        <tbody>${seasonRows}</tbody>
+      </table>
+      <div class="stat-summary">
+        <span>${seasonMax - seasonMin === 0 ? "✅ Season is perfectly balanced." : `⚖️ Season spread: ${seasonMax - seasonMin} game(s). Generate another set to even it out.`}</span>
+      </div>
+    `;
+  }
+
+  stat.innerHTML = statHtml;
 
   output.appendChild(stat);
 
   resetBtn.disabled = schedule.length === 0;
 
-  metaText.textContent = `Generated ${schedule.length} game(s). Stops before partnership repetition.`;
+  metaText.textContent = seasonState
+    ? `Set ${seasonState.setNumber}: generated ${schedule.length} game(s). Season games are tracked to auto-balance the next set.`
+    : `Generated ${schedule.length} game(s). Stops before partnership repetition.`;
 }
+
 
 function parsePlayers(raw) {
   return raw
@@ -324,6 +472,45 @@ function validatePlayers(players) {
   return "";
 }
 
+function updateNavControls(seasonState) {
+  const prevBtn = document.getElementById("prevSetBtn");
+  const viewNextBtn = document.getElementById("viewNextSetBtn");
+  const indicator = document.getElementById("setIndicator");
+  const nextSetBtn = document.getElementById("nextSetBtn");
+
+  const total = seasonState ? seasonState.history.length : 0;
+  const index = seasonState ? seasonState.currentIndex : -1;
+
+  prevBtn.disabled = !seasonState || index <= 0;
+  viewNextBtn.disabled = !seasonState || index >= total - 1;
+  nextSetBtn.disabled = !seasonState;
+  indicator.textContent = seasonState ? `Set ${index + 1} of ${total}` : "No sets yet";
+}
+
+function showHistoryEntry(seasonState) {
+  const entry = seasonState.history[seasonState.currentIndex];
+  renderSchedule(entry.schedule, seasonState.players, entry);
+  updateNavControls(seasonState);
+}
+
+function generateNextSet(seasonState, attempts) {
+  const players = seasonState.players;
+  const schedule = generateSchedule(players, attempts, new Map(Object.entries(seasonState.cumulativeGames)));
+
+  for (const p of players) {
+    seasonState.cumulativeGames[p] += schedule.filter(([t1, t2]) => t1.includes(p) || t2.includes(p)).length;
+  }
+  seasonState.setNumber += 1;
+  seasonState.history.push({
+    setNumber: seasonState.setNumber,
+    schedule,
+    cumulativeGames: { ...seasonState.cumulativeGames },
+  });
+  seasonState.currentIndex = seasonState.history.length - 1;
+  saveSeason(seasonState);
+  showHistoryEntry(seasonState);
+}
+
 document.getElementById("demoBtn").addEventListener("click", () => {
   document.getElementById("playersInput").value = "A\nB\nC\nD\nE\nF";
   document.getElementById("errorText").textContent = "";
@@ -346,9 +533,95 @@ document.getElementById("startBtn").addEventListener("click", () => {
     return;
   }
 
-  const attemptsRaw = Number.parseInt(document.getElementById("attemptsInput").value, 10);
-  const attempts = Number.isFinite(attemptsRaw) && attemptsRaw > 0 ? attemptsRaw : 300;
+  saveInputs(document.getElementById("playersInput").value);
+  rememberKnownPlayers(players);
+  renderKnownPlayerChips();
 
-  const schedule = generateSchedule(players, attempts);
-  renderSchedule(schedule, players);
+  const seasonState = newSeason(players);
+  generateNextSet(seasonState, DEFAULT_ATTEMPTS);
 });
+
+document.getElementById("nextSetBtn").addEventListener("click", () => {
+  const errorText = document.getElementById("errorText");
+  errorText.textContent = "";
+
+  const players = parsePlayers(document.getElementById("playersInput").value);
+  const validationError = validatePlayers(players);
+  if (validationError) {
+    errorText.textContent = validationError;
+    return;
+  }
+
+  const seasonState = loadSeason(players);
+  if (!seasonState) {
+    errorText.textContent = "Click Start first to begin a season for this player list.";
+    return;
+  }
+
+  generateNextSet(seasonState, DEFAULT_ATTEMPTS);
+});
+
+document.getElementById("knownPlayersChips").addEventListener("click", (event) => {
+  const removeBtn = event.target.closest(".chip-remove");
+  if (removeBtn) {
+    forgetKnownPlayer(removeBtn.dataset.name);
+    renderKnownPlayerChips();
+    return;
+  }
+
+  const addBtn = event.target.closest(".chip-add");
+  if (!addBtn) return;
+
+  const input = document.getElementById("playersInput");
+  const existing = parsePlayers(input.value);
+  const name = addBtn.dataset.name;
+  if (existing.includes(name)) return;
+
+  input.value = existing.concat(name).join("\n") + "\n";
+  input.focus();
+});
+
+document.getElementById("prevSetBtn").addEventListener("click", () => {
+  const players = parsePlayers(document.getElementById("playersInput").value);
+  const seasonState = loadSeason(players);
+  if (!seasonState || seasonState.currentIndex <= 0) return;
+
+  seasonState.currentIndex -= 1;
+  saveSeason(seasonState);
+  showHistoryEntry(seasonState);
+});
+
+document.getElementById("viewNextSetBtn").addEventListener("click", () => {
+  const players = parsePlayers(document.getElementById("playersInput").value);
+  const seasonState = loadSeason(players);
+  if (!seasonState || seasonState.currentIndex >= seasonState.history.length - 1) return;
+
+  seasonState.currentIndex += 1;
+  saveSeason(seasonState);
+  showHistoryEntry(seasonState);
+});
+
+document.getElementById("resetSeasonBtn").addEventListener("click", () => {
+  clearSeason();
+  updateNavControls(null);
+  document.getElementById("errorText").textContent = "";
+  document.getElementById("metaText").textContent = "Season reset. Enter player names and click Start.";
+});
+
+window.addEventListener("DOMContentLoaded", () => {
+  const savedInputs = loadInputs();
+  if (savedInputs) {
+    document.getElementById("playersInput").value = savedInputs.playersRaw || "";
+  }
+
+  renderKnownPlayerChips();
+
+  const players = parsePlayers(document.getElementById("playersInput").value);
+  const seasonState = players.length ? loadSeason(players) : null;
+  if (seasonState && seasonState.history.length) {
+    showHistoryEntry(seasonState);
+  } else {
+    updateNavControls(null);
+  }
+});
+
