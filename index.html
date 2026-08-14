@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Badminton Rotation Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card form-card">
+        <h1>Badminton Rotation</h1>
+        <p class="subtitle">Generate games until partnership repetition starts.</p>
+
+        <label for="playersInput">Player names (one per line)</label>
+        <textarea id="playersInput" rows="10" placeholder="A\nB\nC\nD\nE\nF"></textarea>
+
+        <label for="attemptsInput">Optimization attempts</label>
+        <input id="attemptsInput" type="number" min="1" max="2000" value="300" />
+
+        <div class="actions">
+          <button id="startBtn" type="button">Start</button>
+          <button id="demoBtn" type="button" class="ghost">Load Demo</button>
+        </div>
+
+        <p id="errorText" class="error" aria-live="polite"></p>
+      </section>
+
+      <section class="card output-card">
+        <div class="output-head">
+          <h2>Schedule</h2>
+          <button id="resetColorsBtn" type="button" class="ghost mini" disabled>Reset Colors</button>
+        </div>
+        <p id="metaText" class="meta">Enter player names and click Start.</p>
+        <p class="hint">Tip: Tap a game card to mark it done.</p>
+        <div id="output"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
