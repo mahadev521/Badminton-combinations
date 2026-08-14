@@ -73,7 +73,7 @@ input {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px;
-  font-size: 14px;
+  font-size: 16px;
   background: #ffffff;
   color: var(--ink);
 }
@@ -85,9 +85,67 @@ button:focus {
   outline-offset: 1px;
 }
 
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -4px 0 12px;
+}
+
+.chips:empty {
+  margin: 0;
+}
+
+.chip {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  background: #ecf4ef;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.chip-add {
+  border: 0;
+  background: transparent;
+  color: #2f5643;
+  padding: 6px 4px 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: auto;
+}
+
+.chip-add:hover {
+  background: #dceee4;
+}
+
+.chip-remove {
+  border: 0;
+  background: transparent;
+  color: #7a9186;
+  padding: 6px 10px 6px 4px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  min-height: auto;
+}
+
+.chip-remove:hover {
+  background: #f6d9d5;
+  color: var(--error);
+}
+
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  margin-bottom: 10px;
+}
+
+.actions button {
+  flex: 1 1 auto;
 }
 
 .output-head {
@@ -103,8 +161,11 @@ button {
   background: var(--accent);
   color: #fff;
   padding: 10px 14px;
+  min-height: 44px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 button:hover {
@@ -122,6 +183,7 @@ button.ghost:hover {
 
 button.mini {
   padding: 8px 10px;
+  min-height: 38px;
   font-size: 12px;
 }
 
@@ -180,24 +242,37 @@ button:disabled {
 }
 
 .teams {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-family: "Space Grotesk", sans-serif;
   font-weight: 600;
 }
 
+.teams .label {
+  flex: 0 0 auto;
+}
+
 .teams .vs {
+  flex: 0 0 auto;
   color: #537464;
   font-size: 12px;
   letter-spacing: 0.08em;
 }
 
 .team {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.teams .team:first-of-type {
+  text-align: left;
+}
+
+.teams .team:last-of-type {
+  text-align: right;
 }
 
 .rest-line {
@@ -225,13 +300,114 @@ button:disabled {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px dashed var(--line);
-  white-space: pre;
-  line-height: 1.5;
-  font-family: "Space Grotesk", sans-serif;
 }
+
+.stat-title {
+  font-family: "Space Grotesk", sans-serif;
+  margin: 14px 0 8px;
+}
+
+.stat-title:first-child {
+  margin-top: 0;
+}
+
+.stat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.stat-table th,
+.stat-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.stat-table th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.stat-table td:not(:first-child) {
+  text-align: center;
+}
+
+.stat-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 10px 0 4px;
+  color: #274132;
+  font-size: 13px;
+}
+
 
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    margin: 0;
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .card {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  h1 {
+    font-size: 22px;
+  }
+
+  .actions {
+    gap: 6px;
+  }
+
+  .actions button {
+    flex: 1 1 100%;
+  }
+
+  .nav-actions button {
+    flex: 1 1 auto;
+  }
+
+  #setIndicator {
+    flex: 1 1 100%;
+    text-align: center;
+    order: -1;
+  }
+
+  .game {
+    padding: 10px;
+  }
+
+  .teams {
+    gap: 6px;
+  }
+
+  .teams .vs {
+    font-size: 11px;
+  }
+
+  .stat-table {
+    font-size: 13px;
+  }
+
+  .stat-table th,
+  .stat-table td {
+    padding: 5px 6px;
   }
 }
