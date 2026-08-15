@@ -32,7 +32,7 @@ function loadSeason(players) {
   }
 }
 
-function newSeason(players) {
+function newSeason(players, courtView = "end", servingPlacement = "bottom") {
   return {
     key: playersKey(players),
     players,
@@ -40,6 +40,8 @@ function newSeason(players) {
     cumulativeGames: Object.fromEntries(players.map((p) => [p, 0])),
     history: [],
     currentIndex: -1,
+    courtView,
+    servingPlacement,
     updatedAt: Date.now(),
   };
 }
@@ -54,7 +56,16 @@ function clearSeason() {
 }
 
 const INPUTS_STORAGE_KEY = "badmintonInputs";
+const THEME_STORAGE_KEY = "badmintonTheme";
 const DEFAULT_ATTEMPTS = 400;
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const toggle = document.getElementById("themeToggle");
+  const isDark = theme === "dark";
+  toggle.setAttribute("aria-label", isDark ? "Switch to light theme" : "Switch to dark theme");
+  toggle.setAttribute("title", isDark ? "Switch to light theme" : "Switch to dark theme");
+}
 
 function saveInputs(playersRaw) {
   localStorage.setItem(INPUTS_STORAGE_KEY, JSON.stringify({ playersRaw }));
@@ -327,11 +338,123 @@ function generateSchedule(players, attempts = 300, initialGames = null) {
   return bestSchedule;
 }
 
-function renderSchedule(schedule, players, seasonState) {
+function createMatchState(topTeam, bottomTeam, targetScore = 21) {
+  return {
+    targetScore,
+    topScore: 0,
+    bottomScore: 0,
+    server: "",
+    receiver: "",
+    firstServer: "",
+    firstReceiver: "",
+    courtServingTeam: "",
+    courtView: "end",
+    courtServingPlacement: "bottom",
+    topPositions: { left: topTeam[0], right: topTeam[1] },
+    bottomPositions: { left: bottomTeam[0], right: bottomTeam[1] },
+    undoStack: [],
+    finished: false,
+  };
+}
+
+function teamForPlayer(player, topTeam, bottomTeam) {
+  return topTeam.includes(player) ? "top" : bottomTeam.includes(player) ? "bottom" : "";
+}
+
+function placePlayer(positions, team, player, side) {
+  positions[side] = player;
+  positions[side === "right" ? "left" : "right"] = team.find((name) => name !== player);
+}
+
+function oppositePositionKey(position) {
+  return position === "right" ? "left" : "right";
+}
+
+function receiverPositionKey(state, serverPosition) {
+  return state.courtView === "side" ? serverPosition : oppositePositionKey(serverPosition);
+}
+
+function servicePositionKey(state, team, score) {
+  const serviceSide = score % 2 === 0 ? "right" : "left";
+  if (state.courtView !== "end") return serviceSide;
+
+  const initialTeamAtTop = state.courtServingPlacement === "top"
+    ? state.courtServingTeam
+    : state.courtServingTeam === "top" ? "bottom" : "top";
+  const teamIsAtTop = team === initialTeamAtTop;
+
+  return teamIsAtTop ? (serviceSide === "right" ? "left" : "right") : serviceSide;
+}
+
+function placeServerAndReceiver(state, topTeam, bottomTeam) {
+  if (!state.server) return;
+  const servingTeam = teamForPlayer(state.server, topTeam, bottomTeam);
+  const servingScore = servingTeam === "top" ? state.topScore : state.bottomScore;
+  const serverSide = servicePositionKey(state, servingTeam, servingScore);
+  const serverPositions = servingTeam === "top" ? state.topPositions : state.bottomPositions;
+  const receivingPositions = servingTeam === "top" ? state.bottomPositions : state.topPositions;
+  const serverTeam = servingTeam === "top" ? topTeam : bottomTeam;
+  const receivingTeam = servingTeam === "top" ? bottomTeam : topTeam;
+
+  placePlayer(serverPositions, serverTeam, state.server, serverSide);
+  if (state.receiver) placePlayer(receivingPositions, receivingTeam, state.receiver, receiverPositionKey(state, serverSide));
+}
+
+function gameComplete(state) {
+  return Math.max(state.topScore, state.bottomScore) >= state.targetScore
+    && Math.abs(state.topScore - state.bottomScore) >= 2;
+}
+
+function scorePoint(state, winningTeam, topTeam, bottomTeam) {
+  if (!state.server || !state.receiver || state.finished || gameComplete(state)) return;
+
+  state.undoStack.push({
+    topScore: state.topScore,
+    bottomScore: state.bottomScore,
+    server: state.server,
+    receiver: state.receiver,
+    topPositions: { ...state.topPositions },
+    bottomPositions: { ...state.bottomPositions },
+  });
+
+  const servingTeam = teamForPlayer(state.server, topTeam, bottomTeam);
+  const servingPositions = servingTeam === "top" ? state.topPositions : state.bottomPositions;
+  const receivingPositions = servingTeam === "top" ? state.bottomPositions : state.topPositions;
+
+  if (winningTeam === "top") state.topScore += 1;
+  else state.bottomScore += 1;
+
+  if (winningTeam === servingTeam) {
+    const servingScore = servingTeam === "top" ? state.topScore : state.bottomScore;
+    const nextServerSide = servicePositionKey(state, servingTeam, servingScore);
+    const servingPlayers = servingTeam === "top" ? topTeam : bottomTeam;
+    placePlayer(servingPositions, servingPlayers, state.server, nextServerSide);
+    state.receiver = receivingPositions[receiverPositionKey(state, nextServerSide)];
+  } else {
+    const newServingTeam = winningTeam;
+    const newServingScore = newServingTeam === "top" ? state.topScore : state.bottomScore;
+    const newServerSide = servicePositionKey(state, newServingTeam, newServingScore);
+    const newServingPositions = newServingTeam === "top" ? state.topPositions : state.bottomPositions;
+    const newServingPlayers = newServingTeam === "top" ? topTeam : bottomTeam;
+    state.server = newServingPositions[newServerSide];
+    state.receiver = servingPositions[receiverPositionKey(state, newServerSide)];
+    placePlayer(newServingPositions, newServingPlayers, state.server, newServerSide);
+  }
+}
+
+function undoScore(state) {
+  const previous = state.undoStack.pop();
+  if (previous && !state.finished) Object.assign(state, previous);
+}
+
+function renderSchedule(schedule, players, setState, seasonState) {
   const output = document.getElementById("output");
   const metaText = document.getElementById("metaText");
-  const resetBtn = document.getElementById("resetColorsBtn");
+  const resetBtn = document.getElementById("resetCurrentSetBtn");
   output.innerHTML = "";
+
+  const completedGameIndexes = new Set(setState.completedGameIndexes || []);
+  if (!setState.matchStates) setState.matchStates = {};
 
   const playerGames = new Map(players.map((p) => [p, 0]));
   const partnerCount = new Map();
@@ -347,35 +470,79 @@ function renderSchedule(schedule, players, seasonState) {
     partnerCount.set(pairKey(team1), (partnerCount.get(pairKey(team1)) || 0) + 1);
     partnerCount.set(pairKey(team2), (partnerCount.get(pairKey(team2)) || 0) + 1);
 
+    const state = setState.matchStates[idx];
+    const expanded = setState.expandedGameIndex === idx;
     const card = document.createElement("article");
-    card.className = "game";
-    card.setAttribute("role", "button");
-    card.setAttribute("tabindex", "0");
+    card.className = `${completedGameIndexes.has(idx) ? "game done" : "game"}${expanded ? " expanded" : ""}`;
     card.innerHTML = `
-      <div class="game-title">🏸 GAME ${idx + 1}</div>
-      <div class="game-line teams">
-        <span class="label">👥</span>
-        <span class="team">${escapeHtml(team1[0])} + ${escapeHtml(team1[1])}</span>
-        <span class="vs">VS</span>
-        <span class="team">${escapeHtml(team2[0])} + ${escapeHtml(team2[1])}</span>
-      </div>
-      <div class="game-line rest-line">
-        <span class="label">😴</span>
-        <span>Rest: ${escapeHtml(rest.join(", ") || "None")}</span>
-      </div>
-      <span class="status-pill">Tap to mark done</span>
+      <button type="button" class="game-summary" aria-expanded="${expanded}">
+        <span class="game-title">🏸 GAME ${idx + 1}</span>
+        <span class="game-line teams"><span class="label">👥</span><span class="team">${escapeHtml(team1.join(" + "))}</span><span class="vs">VS</span><span class="team">${escapeHtml(team2.join(" + "))}</span></span>
+        <span class="game-line rest-line"><span class="label">😴</span><span>Rest: ${escapeHtml(rest.join(", ") || "None")}</span></span>
+        <span class="game-footer"><span class="score-pill">${state ? `${state.topScore} - ${state.bottomScore}` : "0 - 0"}</span><span class="status-pill">${state?.finished ? "Finished" : "Open scorer"}</span></span>
+      </button>
     `;
 
-    const toggleDone = () => {
-      card.classList.toggle("done");
-    };
+    if (expanded) {
+      const match = state || createMatchState(team1, team2);
+      const started = match.topScore > 0 || match.bottomScore > 0;
+      const servingTeam = teamForPlayer(match.server, team1, team2);
+      const receiverTeam = servingTeam === "top" ? team2 : team1;
+      const receiverOptions = started ? [...team1, ...team2] : receiverTeam;
+      const hasServer = Boolean(servingTeam);
+      const courtView = setState.courtView || "end";
+      const servingPlacement = match.courtServingPlacement || (courtView === "side" ? "right" : "bottom");
+      const courtServingTeam = match.courtServingTeam || "top";
+      const alternateTeam = courtServingTeam === "top" ? "bottom" : "top";
+      const servingStartsPrimary = servingPlacement === "top" || servingPlacement === "left";
+      const primaryTeam = servingStartsPrimary ? courtServingTeam : alternateTeam;
+      const secondaryTeam = primaryTeam === "top" ? "bottom" : "top";
+      const primaryPositions = primaryTeam === "top" ? match.topPositions : match.bottomPositions;
+      const secondaryPositions = secondaryTeam === "top" ? match.topPositions : match.bottomPositions;
+      const primaryLabel = hasServer ? (servingTeam === primaryTeam ? "Serving" : "Receiving") : "Team";
+      const secondaryLabel = hasServer ? (servingTeam === secondaryTeam ? "Serving" : "Receiving") : "Team";
+      const primaryButtonTeam = primaryTeam === "top" ? team1 : team2;
+      const secondaryButtonTeam = secondaryTeam === "top" ? team1 : team2;
+      const primaryButtonScore = primaryTeam === "top" ? match.topScore : match.bottomScore;
+      const secondaryButtonScore = secondaryTeam === "top" ? match.topScore : match.bottomScore;
+      const placementOptions = courtView === "side"
+        ? [["left", "Left"], ["right", "Right"]]
+        : [["top", "Top"], ["bottom", "Bottom"]];
+      const options = (names, selected, placeholder) => `<option value="">${placeholder}</option>${names.map((name) => `<option value="${escapeHtml(name)}"${selected === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}`;
+      const scorer = document.createElement("section");
+      scorer.className = "scorer-panel";
+      scorer.innerHTML = `
+        <div class="scorer-settings">
+          <label>Play to <select class="score-target" ${started || match.finished ? "disabled" : ""}><option value="11"${match.targetScore === 11 ? " selected" : ""}>11</option><option value="21"${match.targetScore === 21 ? " selected" : ""}>21</option></select></label>
+          <label>Serving team starts <select class="court-placement" ${started || match.finished ? "disabled" : ""}>${placementOptions.map(([value, label]) => `<option value="${value}"${servingPlacement === value ? " selected" : ""}>${label}</option>`).join("")}</select></label>
+          <label>First server <select class="server-select" ${started || match.finished ? "disabled" : ""}>${options([...team1, ...team2], match.firstServer || match.server, "Select player")}</select></label>
+          <label>First receiver <select class="receiver-select" ${!match.server || started || match.finished ? "disabled" : ""}>${options(receiverOptions, match.firstReceiver || match.receiver, "Select opponent")}</select></label>
+        </div>
+        <div class="court court-${courtView}"><div class="court-side ${primaryLabel === "Serving" ? "serving" : ""}"><span class="court-label">${primaryLabel}</span><span>${escapeHtml(primaryPositions.left)}</span><span>${escapeHtml(primaryPositions.right)}</span></div><div class="net">NET</div><div class="court-side ${secondaryLabel === "Serving" ? "serving" : ""}"><span class="court-label">${secondaryLabel}</span><span>${escapeHtml(secondaryPositions.left)}</span><span>${escapeHtml(secondaryPositions.right)}</span></div></div>
+        <p class="service-note">${match.server && match.receiver ? `${escapeHtml(match.server)} to ${escapeHtml(match.receiver)} from ${(servingTeam === "top" ? match.topScore : match.bottomScore) % 2 === 0 ? "right" : "left"}` : "Select the first server and receiver."}</p>
+        <div class="scorer-actions"><div class="point-actions"><button type="button" class="point-btn primary-point" ${!match.server || !match.receiver || match.finished || gameComplete(match) ? "disabled" : ""}><span>${escapeHtml(primaryButtonTeam.join(" + "))}</span><span class="point-team-score">Score: ${primaryButtonScore}</span><strong>+1</strong></button><button type="button" class="point-btn secondary-point" ${!match.server || !match.receiver || match.finished || gameComplete(match) ? "disabled" : ""}><span>${escapeHtml(secondaryButtonTeam.join(" + "))}</span><span class="point-team-score">Score: ${secondaryButtonScore}</span><strong>+1</strong></button></div><div class="game-actions"><button type="button" class="ghost undo-btn" ${match.undoStack.length === 0 || match.finished ? "disabled" : ""}>Undo</button><button type="button" class="finish-btn" ${!gameComplete(match) || match.finished ? "disabled" : ""}>${match.finished ? "Finished" : "Finish Game"}</button></div></div>
+      `;
+      const update = (change) => {
+        if (!setState.matchStates[idx]) setState.matchStates[idx] = createMatchState(team1, team2);
+        change(setState.matchStates[idx]);
+        saveSeason(seasonState);
+        showHistoryEntry(seasonState);
+      };
+      scorer.querySelector(".score-target").addEventListener("change", (event) => update((active) => { active.targetScore = Number(event.target.value); }));
+      scorer.querySelector(".court-placement").addEventListener("change", (event) => update((active) => { active.courtServingPlacement = event.target.value; }));
+      scorer.querySelector(".server-select").addEventListener("change", (event) => update((active) => { active.server = event.target.value; active.firstServer = event.target.value; active.receiver = ""; active.firstReceiver = ""; active.courtServingTeam = teamForPlayer(active.server, team1, team2); active.courtView = courtView; active.courtServingPlacement = servingPlacement; placeServerAndReceiver(active, team1, team2); }));
+      scorer.querySelector(".receiver-select").addEventListener("change", (event) => update((active) => { active.receiver = event.target.value; active.firstReceiver = event.target.value; placeServerAndReceiver(active, team1, team2); }));
+      scorer.querySelector(".primary-point").addEventListener("click", (event) => { event.stopPropagation(); update((active) => scorePoint(active, primaryTeam, team1, team2)); });
+      scorer.querySelector(".secondary-point").addEventListener("click", (event) => { event.stopPropagation(); update((active) => scorePoint(active, secondaryTeam, team1, team2)); });
+      scorer.querySelector(".undo-btn").addEventListener("click", () => update(undoScore));
+      scorer.querySelector(".finish-btn").addEventListener("click", () => update((active) => { if (gameComplete(active)) { active.finished = true; completedGameIndexes.add(idx); setState.completedGameIndexes = [...completedGameIndexes]; } }));
+      card.appendChild(scorer);
+    }
 
-    card.addEventListener("click", toggleDone);
-    card.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        toggleDone();
-      }
+    card.querySelector(".game-summary").addEventListener("click", () => {
+      setState.expandedGameIndex = expanded ? null : idx;
+      saveSeason(seasonState);
+      showHistoryEntry(seasonState);
     });
 
     output.appendChild(card);
@@ -441,9 +608,19 @@ function renderSchedule(schedule, players, seasonState) {
   output.appendChild(stat);
 
   resetBtn.disabled = schedule.length === 0;
+  resetBtn.onclick = () => {
+    if (!window.confirm("Reset all scores and completed markers for this set?")) return;
 
-  metaText.textContent = seasonState
-    ? `Set ${seasonState.setNumber}: generated ${schedule.length} game(s). Season games are tracked to auto-balance the next set.`
+    completedGameIndexes.clear();
+    setState.completedGameIndexes = [];
+    setState.matchStates = {};
+    setState.expandedGameIndex = null;
+    saveSeason(seasonState);
+    showHistoryEntry(seasonState);
+  };
+
+  metaText.textContent = setState
+    ? `Set ${setState.setNumber}: generated ${schedule.length} game(s). Season games are tracked to auto-balance the next set.`
     : `Generated ${schedule.length} game(s). Stops before partnership repetition.`;
 }
 
@@ -477,6 +654,8 @@ function updateNavControls(seasonState) {
   const viewNextBtn = document.getElementById("viewNextSetBtn");
   const indicator = document.getElementById("setIndicator");
   const nextSetBtn = document.getElementById("nextSetBtn");
+  const startBtn = document.getElementById("startBtn");
+  const courtViewChoices = document.querySelectorAll('input[name="courtView"]');
 
   const total = seasonState ? seasonState.history.length : 0;
   const index = seasonState ? seasonState.currentIndex : -1;
@@ -484,12 +663,23 @@ function updateNavControls(seasonState) {
   prevBtn.disabled = !seasonState || index <= 0;
   viewNextBtn.disabled = !seasonState || index >= total - 1;
   nextSetBtn.disabled = !seasonState;
+  startBtn.disabled = Boolean(seasonState);
+  courtViewChoices.forEach((choice) => { choice.disabled = Boolean(seasonState); });
   indicator.textContent = seasonState ? `Set ${index + 1} of ${total}` : "No sets yet";
+}
+
+function selectedCourtView() {
+  return document.querySelector('input[name="courtView"]:checked').value;
+}
+
+function setSelectedCourtView(courtView) {
+  const choice = document.querySelector(`input[name="courtView"][value="${courtView}"]`);
+  if (choice) choice.checked = true;
 }
 
 function showHistoryEntry(seasonState) {
   const entry = seasonState.history[seasonState.currentIndex];
-  renderSchedule(entry.schedule, seasonState.players, entry);
+  renderSchedule(entry.schedule, seasonState.players, entry, seasonState);
   updateNavControls(seasonState);
 }
 
@@ -505,6 +695,9 @@ function generateNextSet(seasonState, attempts) {
     setNumber: seasonState.setNumber,
     schedule,
     cumulativeGames: { ...seasonState.cumulativeGames },
+    completedGameIndexes: [],
+    courtView: seasonState.courtView || "end",
+    servingPlacement: seasonState.servingPlacement || "bottom",
   });
   seasonState.currentIndex = seasonState.history.length - 1;
   saveSeason(seasonState);
@@ -512,14 +705,10 @@ function generateNextSet(seasonState, attempts) {
 }
 
 document.getElementById("demoBtn").addEventListener("click", () => {
+  if (!window.confirm("Replace the current player names with the demo list?")) return;
+
   document.getElementById("playersInput").value = "A\nB\nC\nD\nE\nF";
   document.getElementById("errorText").textContent = "";
-});
-
-document.getElementById("resetColorsBtn").addEventListener("click", () => {
-  document.querySelectorAll(".game.done").forEach((card) => {
-    card.classList.remove("done");
-  });
 });
 
 document.getElementById("startBtn").addEventListener("click", () => {
@@ -537,7 +726,8 @@ document.getElementById("startBtn").addEventListener("click", () => {
   rememberKnownPlayers(players);
   renderKnownPlayerChips();
 
-  const seasonState = newSeason(players);
+  const courtView = selectedCourtView();
+  const seasonState = newSeason(players, courtView);
   generateNextSet(seasonState, DEFAULT_ATTEMPTS);
 });
 
@@ -602,13 +792,29 @@ document.getElementById("viewNextSetBtn").addEventListener("click", () => {
 });
 
 document.getElementById("resetSeasonBtn").addEventListener("click", () => {
+  if (!window.confirm("Reset the season, player names, and all completed markers?")) return;
+
   clearSeason();
+  localStorage.removeItem(INPUTS_STORAGE_KEY);
+  document.getElementById("playersInput").value = "";
+  document.getElementById("output").innerHTML = "";
+  const resetCurrentSetBtn = document.getElementById("resetCurrentSetBtn");
+  resetCurrentSetBtn.disabled = true;
+  resetCurrentSetBtn.onclick = null;
   updateNavControls(null);
   document.getElementById("errorText").textContent = "";
   document.getElementById("metaText").textContent = "Season reset. Enter player names and click Start.";
+  document.getElementById("playersInput").focus();
 });
 
 window.addEventListener("DOMContentLoaded", () => {
+  applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || "light");
+  document.getElementById("themeToggle").addEventListener("click", () => {
+    const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    applyTheme(nextTheme);
+  });
+
   const savedInputs = loadInputs();
   if (savedInputs) {
     document.getElementById("playersInput").value = savedInputs.playersRaw || "";
@@ -619,6 +825,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const players = parsePlayers(document.getElementById("playersInput").value);
   const seasonState = players.length ? loadSeason(players) : null;
   if (seasonState && seasonState.history.length) {
+    setSelectedCourtView(seasonState.courtView || "end");
     showHistoryEntry(seasonState);
   } else {
     updateNavControls(null);
