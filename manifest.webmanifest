@@ -1,0 +1,37 @@
+{
+  "name": "Badminton Rotation",
+  "short_name": "Badminton",
+  "description": "Generate balanced badminton games with fair rests, varied partnerships, and a live court scorer.",
+  "start_url": ".",
+  "scope": ".",
+  "id": "badminton-rotation",
+  "display": "standalone",
+  "background_color": "#0b0f0d",
+  "theme_color": "#00a862",
+  "categories": ["sports", "utilities"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

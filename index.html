@@ -2,67 +2,141 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Badminton Rotation Generator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Badminton Rotation</title>
+    <meta name="description" content="Generate balanced badminton games with fair rests, varied partnerships, and a live court scorer." />
+
+    <meta id="themeColorMeta" name="theme-color" content="#f4f6f5" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Badminton" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="style.css?v=20" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css?v=48" />
   </head>
-  <body>
-    <button id="themeToggle" type="button" class="theme-toggle" aria-label="Switch to dark theme" title="Switch to dark theme">
-      <span aria-hidden="true">☀</span><span aria-hidden="true">☾</span>
-    </button>
-    <main class="shell">
-      <section class="card form-card">
-        <h1>Badminton Rotation</h1>
-        <p class="subtitle">Generate games until partnership repetition starts.</p>
+  <body data-view="setup">
+    <div class="app">
+      <header class="app-bar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">🏸</span>
+          <span class="brand-text">
+            <strong>Badminton Rotation</strong>
+            <small id="brandStatus">Fair games, every time</small>
+          </span>
+        </div>
+        <button id="themeToggle" type="button" class="theme-toggle" aria-label="Switch to dark theme" title="Switch to dark theme">
+          <span class="theme-icon sun" aria-hidden="true">☀️</span>
+          <span class="theme-icon moon" aria-hidden="true">🌙</span>
+        </button>
+      </header>
 
-        <label for="playersInput">Player names (one per line)</label>
-        <textarea id="playersInput" rows="10" placeholder="A\nB\nC\nD\nE\nF"></textarea>
+      <div class="progress-rail" role="presentation">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
 
-        <div id="knownPlayersChips" class="chips"></div>
-
-        <div class="court-view-settings">
-          <span id="courtViewLabel" class="court-view-label">Court view</span>
-          <div class="court-view-toggle" role="radiogroup" aria-labelledby="courtViewLabel">
-            <input id="courtViewEnd" name="courtView" type="radio" value="end" checked />
-            <label for="courtViewEnd">Back view</label>
-            <input id="courtViewSide" name="courtView" type="radio" value="side" />
-            <label for="courtViewSide">Sideline</label>
+      <main class="shell">
+        <section class="card form-card" id="setupPanel" aria-labelledby="setupHeading">
+          <div class="card-head">
+            <h1 id="setupHeading"><span class="head-emoji" aria-hidden="true">🧑‍🤝‍🧑</span> Line-up</h1>
+            <p class="subtitle">Balanced games, fair rests, fresh partnerships.</p>
           </div>
-        </div>
 
-        <div class="actions">
-          <button id="startBtn" type="button">Start</button>
-          <button id="nextSetBtn" type="button" class="ghost" disabled>New Set</button>
-          <button id="demoBtn" type="button" class="ghost">Load Demo</button>
-        </div>
+          <div class="field">
+            <div class="field-head">
+              <label for="playersInput">Player names</label>
+              <span id="playerCount" class="field-badge">0 players</span>
+            </div>
+            <textarea id="playersInput" rows="8" placeholder="One name per line&#10;&#10;Alex&#10;Bella&#10;Chris&#10;Dev" autocapitalize="words" autocomplete="off" spellcheck="false" enterkeyhint="enter"></textarea>
+            <p class="field-hint">Tip: 4 players minimum. Tap a saved name below to add it.</p>
+          </div>
 
-        <div class="actions nav-actions">
-          <button id="prevSetBtn" type="button" class="ghost mini" disabled>◀ Previous</button>
-          <span id="setIndicator" class="hint" style="margin:0; align-self:center;">No sets yet</span>
-          <button id="viewNextSetBtn" type="button" class="ghost mini" disabled>Next ▶</button>
-        </div>
+          <div id="knownPlayersChips" class="chips" aria-label="Saved players"></div>
 
-        <div class="actions">
-          <button id="resetSeasonBtn" type="button" class="mini">Reset Season</button>
-        </div>
+          <div class="field">
+            <div class="field-head">
+              <label for="gameCountInput">Games to generate</label>
+              <span id="gamesHint" class="field-badge">—</span>
+            </div>
+            <div class="stepper">
+              <button type="button" id="gamesMinus" class="step-btn" aria-label="Fewer games">−</button>
+              <input id="gameCountInput" type="number" inputmode="numeric" min="1" max="60" step="1" value="12" aria-describedby="gamesHint" />
+              <button type="button" id="gamesPlus" class="step-btn" aria-label="More games">+</button>
+            </div>
+            <p class="field-hint">Rests and partnerships stay as even as the number allows.</p>
+          </div>
 
-        <p id="errorText" class="error" aria-live="polite"></p>
-      </section>
+          <div class="court-view-settings">
+            <span id="courtViewLabel" class="section-label">Court view</span>
+            <div class="segmented court-view-toggle" role="radiogroup" aria-labelledby="courtViewLabel">
+              <input id="courtViewEnd" name="courtView" type="radio" value="end" checked />
+              <label for="courtViewEnd"><span aria-hidden="true">🔭</span> Back view</label>
+              <input id="courtViewSide" name="courtView" type="radio" value="side" />
+              <label for="courtViewSide"><span aria-hidden="true">📐</span> Sideline</label>
+            </div>
+          </div>
 
-      <section class="card output-card">
-        <div class="output-head">
-          <h2>Schedule</h2>
-          <button id="resetCurrentSetBtn" type="button" class="ghost mini" disabled>Reset Current Set</button>
-        </div>
-        <p id="metaText" class="meta">Enter player names and click Start.</p>
-        <p class="hint">Select a game to score it.</p>
-        <div id="output"></div>
-      </section>
-    </main>
+          <div class="actions primary-actions">
+            <button id="startBtn" type="button" class="btn-primary btn-lg">
+              <span aria-hidden="true">🏸</span> Start Session
+            </button>
+          </div>
 
-    <script src="app.js?v=28"></script>
+          <div class="actions">
+            <button id="demoBtn" type="button" class="ghost"><span aria-hidden="true">✨</span> Demo</button>
+            <button id="shuffleNamesBtn" type="button" class="ghost"><span aria-hidden="true">🔀</span> Shuffle</button>
+            <button id="resetSeasonBtn" type="button" class="ghost danger"><span aria-hidden="true">🗑️</span> Reset</button>
+          </div>
+
+          <p id="errorText" class="error" aria-live="polite" aria-atomic="true"></p>
+        </section>
+
+        <section class="card output-card" id="playPanel" aria-labelledby="scheduleHeading">
+          <div class="card-head output-head">
+            <div>
+              <h2 id="scheduleHeading"><span class="head-emoji" aria-hidden="true">📋</span> Schedule</h2>
+              <p id="metaText" class="meta">Add player names, then tap Start Session.</p>
+            </div>
+            <div class="output-head-actions">
+              <button id="regenerateBtn" type="button" class="ghost mini" disabled title="Build a fresh schedule with the current settings">
+                <span aria-hidden="true">🎲</span> Regenerate
+              </button>
+              <button id="resetCurrentSetBtn" type="button" class="ghost mini danger" disabled title="Clear all scores">
+                <span aria-hidden="true">↺</span> Clear Scores
+              </button>
+            </div>
+          </div>
+          <div id="output" class="output"></div>
+        </section>
+      </main>
+
+      <nav class="tab-bar" aria-label="Sections">
+        <button type="button" class="tab" data-view="setup" aria-current="page">
+          <span class="tab-icon" aria-hidden="true">🧑‍🤝‍🧑</span>
+          <span class="tab-label">Line-up</span>
+        </button>
+        <button type="button" class="tab" data-view="play">
+          <span class="tab-icon" aria-hidden="true">🏸</span>
+          <span class="tab-label">Play</span>
+          <span id="tabBadge" class="tab-badge" hidden></span>
+        </button>
+      </nav>
+    </div>
+
+    <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="false"></div>
+    <div id="dialogHost"></div>
+
+    <script src="app.js?v=60"></script>
   </body>
 </html>

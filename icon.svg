@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Badminton Rotation">
+  <defs>
+    <linearGradient id="court" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="512">
+      <stop offset="0" stop-color="#1bc47d" />
+      <stop offset="1" stop-color="#035f38" />
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#court)" />
+
+  <!-- Feather skirt -->
+  <path d="M187 340 L105 118 Q100 74 256 74 Q412 74 407 118 L325 340 Z" fill="#ffffff" />
+
+  <!-- Feather separations, painted with the background gradient so they read as gaps -->
+  <g stroke="url(#court)" stroke-width="9" stroke-linecap="butt">
+    <line x1="217.2" y1="294.3" x2="61.8" y2="111.3" />
+    <line x1="228.9" y1="286.5" x2="120.3" y2="72.5" />
+    <line x1="241.9" y1="281.7" x2="185.8" y2="48.3" />
+    <line x1="256.0" y1="280.0" x2="256.0" y2="40.0" />
+    <line x1="270.0" y1="281.7" x2="326.2" y2="48.3" />
+    <line x1="283.1" y1="286.5" x2="391.7" y2="72.5" />
+    <line x1="294.8" y1="294.3" x2="450.2" y2="111.3" />
+  </g>
+
+  <!-- Cork -->
+  <circle cx="256" cy="340" r="79" fill="#f2a30f" />
+</svg>
