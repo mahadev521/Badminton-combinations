@@ -64,36 +64,36 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #0b0f0d;
-  --bg-tint-a: #00c97318;
-  --bg-tint-b: #ffb02012;
-  --surface: #141a17;
-  --surface-2: #1b2320;
-  --surface-3: #222b27;
-  --ink: #e9f0ec;
-  --ink-soft: #cfdcd5;
-  --muted: #92a69b;
-  --line: #2a3531;
-  --line-soft: #212b27;
+  --bg: #080d0b;
+  --bg-tint-a: #00c97320;
+  --bg-tint-b: #ffb02014;
+  --surface: #111916;
+  --surface-2: #18221e;
+  --surface-3: #202d27;
+  --ink: #f0f7f3;
+  --ink-soft: #d3e2da;
+  --muted: #9bb0a5;
+  --line: #304039;
+  --line-soft: #26342e;
 
-  --accent: #21c97c;
-  --accent-strong: #3ada90;
-  --accent-soft: #122c20;
-  --accent-ink: #8ce8b8;
-  --shuttle: #ffc857;
-  --shuttle-soft: #2e2515;
-  --shuttle-ink: #ffdf9e;
+  --accent: #54d89a;
+  --accent-strong: #78e5b2;
+  --accent-soft: #123824;
+  --accent-ink: #a7f3c9;
+  --shuttle: #f6c65b;
+  --shuttle-soft: #302817;
+  --shuttle-ink: #ffe6a4;
   --error: #ff8f85;
   --error-soft: #35201e;
 
-  --court-bg-a: #10553a;
-  --court-bg-b: #0a3d29;
-  --court-line: #ffffff33;
+  --court-bg-a: #126a46;
+  --court-bg-b: #083b29;
+  --court-line: #ffffff4d;
 
   --shadow-sm: 0 1px 2px #00000059;
-  --shadow-md: 0 4px 12px -2px #00000073, 0 12px 28px -10px #00000080;
-  --shadow-lg: 0 10px 24px -6px #00000080, 0 28px 56px -20px #00000099;
-  --shadow-accent: 0 6px 18px -6px #21c97c4d;
+  --shadow-md: 0 5px 14px -2px #00000080, 0 14px 30px -10px #00000099;
+  --shadow-lg: 0 12px 28px -6px #00000099, 0 32px 64px -20px #000000b3;
+  --shadow-accent: 0 7px 20px -6px #21c97c66;
 
   color-scheme: dark;
 }
@@ -615,6 +615,217 @@ input[type="number"]:focus {
 
 :root[data-theme="dark"] .segmented input:checked + label {
   background: var(--accent-soft);
+}
+
+:root[data-theme="dark"] body {
+  background-image:
+    radial-gradient(900px 520px at 4% -14%, #16714b20 0, transparent 68%),
+    radial-gradient(760px 480px at 105% 0%, #8b641b13 0, transparent 66%),
+    linear-gradient(155deg, #0a0e0c 0%, #111815 48%, #0b100d 100%);
+}
+
+:root[data-theme="dark"] .app-bar,
+:root[data-theme="dark"] .tab-bar {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-color: #ffffff12;
+}
+
+:root[data-theme="dark"] .card {
+  border-color: #ffffff18;
+  background: linear-gradient(145deg, #17201b 0%, #121a16 100%);
+  box-shadow: var(--shadow-md);
+}
+
+:root[data-theme="dark"] .card-head h1,
+:root[data-theme="dark"] .card-head h2 {
+  color: #f4faf6;
+}
+
+:root[data-theme="dark"] .subtitle,
+:root[data-theme="dark"] .meta,
+:root[data-theme="dark"] .field-hint {
+  color: #a8b9b0;
+}
+
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] input[type="text"],
+:root[data-theme="dark"] input[type="number"] {
+  background: #0d1410;
+  border-color: #405149;
+  color: #f0f8f3;
+}
+
+:root[data-theme="dark"] textarea:focus,
+:root[data-theme="dark"] input[type="text"]:focus,
+:root[data-theme="dark"] input[type="number"]:focus {
+  background: #14221b;
+  box-shadow: 0 0 0 4px #21c97c2b;
+}
+
+:root[data-theme="dark"] .game {
+  border-color: #ffffff16;
+  background: linear-gradient(145deg, #17231d 0%, #101813 58%, #0d140f 100%);
+}
+
+:root[data-theme="dark"] .game-summary:active:not(:disabled) {
+  background: #1d2922;
+}
+
+:root[data-theme="dark"] .game:hover:not(.expanded) {
+  border-color: #21c97c80;
+}
+
+:root[data-theme="dark"] .game.expanded {
+  border-color: var(--accent);
+  box-shadow: 0 14px 34px -12px #000000cc, 0 0 0 1px #21c97c33;
+}
+
+:root[data-theme="dark"] .matchup .team,
+:root[data-theme="dark"] .pill,
+:root[data-theme="dark"] .stat-card,
+:root[data-theme="dark"] .scorer-settings {
+  border-color: #ffffff12;
+  background: linear-gradient(145deg, #1b2821 0%, #152019 100%);
+}
+
+:root[data-theme="dark"] .matchup .vs {
+  background: #e9f5ee;
+  color: #102018;
+}
+
+:root[data-theme="dark"] .pill.status.is-live {
+  background: #382e18;
+  border-color: #c49b3d80;
+  color: #ffe5a0;
+}
+
+:root[data-theme="dark"] .pill.status.is-done {
+  background: #176b47;
+  border-color: #54d89a80;
+  color: #effff5;
+}
+
+:root[data-theme="dark"] .court {
+  background:
+    linear-gradient(160deg, #176b48 0%, #0c4d34 48%, #083424 100%);
+  box-shadow: inset 0 0 0 2px #ffffff38, 0 8px 18px #00000040;
+}
+
+:root[data-theme="dark"] .court-player {
+  background: #edf6f0;
+  color: #102018;
+}
+
+:root[data-theme="dark"] .court-player.is-server {
+  background: var(--shuttle);
+  color: #2b1d00;
+  box-shadow: 0 0 0 2.5px var(--shuttle), 0 5px 14px -2px #00000080;
+}
+
+:root[data-theme="dark"] .court-player.is-receiver {
+  box-shadow: 0 0 0 2.5px #54d89acc;
+}
+
+:root[data-theme="dark"] .service-note {
+  border-color: #ffc85780;
+  background: linear-gradient(105deg, #403313 0%, #2d2a1b 54%, #193628 100%);
+  color: #ffe7a0;
+  box-shadow: 0 7px 18px #00000040;
+}
+
+:root[data-theme="dark"] .service-callout-text em {
+  color: #fff7d6;
+}
+
+:root[data-theme="dark"] .service-note::before {
+  filter: saturate(0.8);
+}
+
+:root[data-theme="dark"] .stat-note.is-good {
+  background: #123824;
+  color: #9af0c1;
+}
+
+:root[data-theme="dark"] .stat-card.is-good {
+  border-color: #54d89a66;
+  background: linear-gradient(145deg, #153f2a 0%, #122e20 100%);
+}
+
+:root[data-theme="dark"] .field-badge {
+  background: #153d2a;
+  color: #a7f3c9;
+}
+
+:root[data-theme="dark"] .btn-primary {
+  background: linear-gradient(145deg, #1c9b68 0%, #0d704a 100%);
+  box-shadow: 0 8px 18px -8px #000000cc, 0 0 0 1px #54d89a44;
+}
+
+:root[data-theme="dark"] .btn-primary:hover:not(:disabled) {
+  background: linear-gradient(145deg, #28b97d 0%, #11845a 100%);
+}
+
+:root[data-theme="dark"] button:focus-visible,
+:root[data-theme="dark"] .segmented input:focus-visible + label {
+  outline-color: #8ce8b8;
+}
+
+/* Dark scorer controls: rich surfaces with readable contrast instead of neon blocks. */
+:root[data-theme="dark"] .point-btn {
+  background: linear-gradient(145deg, #1b9b67 0%, #0d7650 48%, #07583d 100%);
+  border: 1px solid #35d99166;
+  box-shadow: 0 8px 18px -8px #000000cc, inset 0 1px 0 #ffffff1c;
+}
+
+:root[data-theme="dark"] .point-btn:hover:not(:disabled) {
+  background: linear-gradient(145deg, #1caf70 0%, #0b8052 100%);
+  border-color: #61e9a580;
+}
+
+:root[data-theme="dark"] .point-btn.is-serving {
+  outline: 2px solid var(--shuttle);
+  outline-offset: -2px;
+  box-shadow: 0 8px 20px -8px #000000dd, 0 0 0 1px #ffc85766;
+}
+
+:root[data-theme="dark"] .point-btn .pt-add {
+  background: #ffffff24;
+  color: #eafff2;
+}
+
+:root[data-theme="dark"] .game-actions .ghost {
+  background: #18231e;
+  border-color: #ffffff18;
+  color: #b6c9bf;
+}
+
+:root[data-theme="dark"] .game-actions .ghost:hover:not(:disabled) {
+  background: #22332a;
+  border-color: #21c97c66;
+  color: #e8fff0;
+}
+
+:root[data-theme="dark"] .game-actions .finish-btn {
+  background: #dce9e1;
+  color: #122219;
+  box-shadow: 0 4px 12px -8px #000000cc;
+}
+
+:root[data-theme="dark"] .game-actions .finish-btn:hover:not(:disabled) {
+  background: #f0fff5;
+}
+
+:root[data-theme="dark"] .game-actions .finish-btn.is-ready {
+  background: linear-gradient(145deg, #ffc857 0%, #c58a16 100%);
+  color: #251b05;
+  box-shadow: 0 6px 16px -6px #ffc85766;
+}
+
+:root[data-theme="dark"] .game-actions button:disabled {
+  background: #111a15;
+  border-color: #ffffff0d;
+  color: #65786d;
+  opacity: 0.78;
 }
 
 .segmented input:focus-visible + label {
