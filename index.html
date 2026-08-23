@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=48" />
+    <link rel="stylesheet" href="style.css?v=55" />
   </head>
   <body data-view="setup">
     <div class="app">
@@ -64,17 +64,20 @@
 
           <div id="knownPlayersChips" class="chips" aria-label="Saved players"></div>
 
-          <div class="field">
-            <div class="field-head">
-              <label for="gameCountInput">Games to generate</label>
-              <span id="gamesHint" class="field-badge">—</span>
+          <p id="gamesPreview" class="field-hint games-preview" aria-live="polite">Add at least 4 players to see how many games it'll take.</p>
+
+          <div id="partnershipMapPanel" class="partnership-map-panel" hidden>
+            <div class="section-label-row">
+              <span class="section-label">Partnership map</span>
+              <span class="field-hint">Tap a cell to jump to that match</span>
             </div>
-            <div class="stepper">
-              <button type="button" id="gamesMinus" class="step-btn" aria-label="Fewer games">−</button>
-              <input id="gameCountInput" type="number" inputmode="numeric" min="1" max="60" step="1" value="12" aria-describedby="gamesHint" />
-              <button type="button" id="gamesPlus" class="step-btn" aria-label="More games">+</button>
+            <div id="partnershipMapMount"></div>
+            <div class="matrix-legend">
+              <span><i class="matrix-swatch" data-count="0"></i>Never</span>
+              <span><i class="matrix-swatch" data-count="1"></i>Once</span>
+              <span><i class="matrix-swatch" data-count="2"></i>Twice</span>
+              <span><i class="matrix-swatch" data-count="3"></i>3+</span>
             </div>
-            <p class="field-hint">Rests and partnerships stay as even as the number allows.</p>
           </div>
 
           <div class="court-view-settings">
@@ -137,6 +140,6 @@
     <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="false"></div>
     <div id="dialogHost"></div>
 
-    <script src="app.js?v=60"></script>
+    <script src="app.js?v=69"></script>
   </body>
 </html>

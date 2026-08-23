@@ -5,10 +5,11 @@ Installable as a home-screen app, works offline, no build step and no dependenci
 
 ## Features
 
-- **You pick the number of games** — ask for 9 or 40 and you get exactly that, split as evenly
-  as the arithmetic allows. The line-up card shows the split live ("8 each", "6–7 each").
+- **The game count is never chosen manually** — the app builds however many games it takes
+  for every player to partner with every other player at least once, then stops.
 - **Balanced scheduling** — games per player are evened out, rests are spread so nobody sits
-  twice in a row while others play, and partnerships stay fresh for as long as possible.
+  twice in a row while others play, and repeated partnerships are avoided unless the group
+  size makes at least one unavoidable.
 - **Live scorer** — official doubles service rules, with the court drawn from your chosen
   viewpoint and the server/receiver highlighted on every point.
 - **Back view or sideline** court orientation.
@@ -60,24 +61,25 @@ service worker and the web app manifest.
 
 1. Enter player names in the **Line-up** tab, one per line — at least four.
    Names you have used before appear as chips; tap to add or remove them.
-2. Set **Games to generate** with the − / + steppers. The badge shows how many games
-   each player gets.
+2. The line-up card previews roughly how many games it'll take to cover every partnership.
 3. Pick a court view: **Back view** (looking down the court) or **Sideline**.
 4. Tap **Start Session**.
 5. In the **Play** tab, tap a game to open the scorer, choose 11 or 21 points,
    then tap a team to award each point. **Undo** reverses the last point.
 6. **Finish Game** locks the result and opens the next game.
-7. **Regenerate** builds a fresh set of match-ups — change the game count first if you want
-   more or fewer. **Clear Scores** keeps the match-ups and wipes the results.
+7. **Regenerate** builds a fresh full-coverage schedule. **Clear Scores** keeps the
+   match-ups and wipes the results.
 
 Session state is saved on the device and restored for two hours, so a locked screen or an
 accidental refresh will not lose your scores.
 
 ## Notes
 
-- Games per player is as even as the numbers allow. With 6 players and 12 games everyone
-  plays 8; with 6 players and 10 games four play 7 and two play 6 — the closest possible split.
+- Game count is derived from the group size: for `n` players there are `n*(n-1)/2` possible
+  partnerships, and each game locks in 2 of them, so `n*(n-1)/4` games is the theoretical floor.
+  The scheduler aims for exactly that; a repeat only happens when the group size makes a
+  perfect cover impossible (e.g. an odd number of total partnerships).
 - Player names are treated as unique regardless of capitalisation, so `Alex` and `alex`
   are rejected as a duplicate.
 - Scheduling is a randomised search bounded by a work budget, so a build stays well under a
-  second for any realistic group and game count. The app shows a "Building…" state while it runs.
+  second for any realistic group size. The app shows a "Building…" state while it runs.

@@ -397,6 +397,16 @@ label {
   font-size: 12px;
 }
 
+.games-preview {
+  margin: 0 0 16px;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
 .section-label {
   display: block;
   margin-bottom: 7px;
@@ -438,50 +448,6 @@ input[type="number"]:focus {
   background: var(--surface);
   border-color: var(--accent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent);
-}
-
-/* Number stepper */
-.stepper {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 52px;
-  gap: 7px;
-}
-
-.stepper .step-btn {
-  min-height: 50px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  color: var(--ink);
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.stepper .step-btn:hover:not(:disabled) {
-  background: var(--surface-3);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-
-.stepper input[type="number"] {
-  min-height: 50px;
-  margin: 0;
-  padding: 8px;
-  text-align: center;
-  font-family: var(--font-display);
-  font-size: 21px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-.stepper input[type="number"]::-webkit-outer-spin-button,
-.stepper input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
 }
 
 :focus-visible {
@@ -836,6 +802,33 @@ input[type="number"]:focus {
 .segmented input:disabled + label {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.partnership-map-panel {
+  margin-bottom: 18px;
+}
+
+.section-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.section-label-row .section-label {
+  margin-bottom: 0;
+}
+
+textarea:disabled,
+input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chips.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .court-view-settings {
@@ -1697,6 +1690,221 @@ button:disabled {
 .stat-note.is-good {
   background: var(--accent-soft);
   color: var(--accent-ink);
+}
+
+/* ==========================================================================
+   Partnership map — player x player heatmap
+   ========================================================================== */
+
+.matrix-frame {
+  display: grid;
+  gap: 6px;
+}
+
+.matrix-scroll {
+  overflow: auto;
+  max-width: 100%;
+  max-height: min(60vh, 520px);
+  padding: 4px 4px 8px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.matrix-table {
+  border-collapse: separate;
+  border-spacing: 3px;
+  font-family: var(--font-display);
+  font-size: var(--matrix-font, 11.5px);
+}
+
+.matrix-corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  width: var(--matrix-row, 74px);
+  min-width: var(--matrix-row, 74px);
+  max-width: var(--matrix-row, 74px);
+  background: var(--surface-2);
+}
+
+.matrix-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: var(--matrix-header, 92px);
+  width: var(--matrix-cell, 30px);
+  min-width: var(--matrix-cell, 30px);
+  padding: 0;
+  background: var(--surface-2);
+  vertical-align: bottom;
+  overflow: visible;
+}
+
+.matrix-table thead th span {
+  display: block;
+  width: var(--matrix-cell, 30px);
+  margin: 0 auto;
+  transform: rotate(-52deg);
+  transform-origin: bottom left;
+  color: var(--muted);
+  font-size: var(--matrix-header-font, 11px);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.matrix-table tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: var(--matrix-row, 74px);
+  min-width: var(--matrix-row, 74px);
+  max-width: var(--matrix-row, 74px);
+  padding: 0 10px 0 4px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: var(--matrix-font, 11.5px);
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: var(--r-sm);
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+
+.matrix-table th,
+.matrix-table td {
+  height: var(--matrix-cell, 30px);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.matrix-cell {
+  width: var(--matrix-cell, 30px);
+  min-width: var(--matrix-cell, 30px);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-weight: 800;
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  transition: transform 140ms var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.matrix-self {
+  background: repeating-linear-gradient(135deg, var(--surface-3) 0 4px, transparent 4px 8px);
+  color: var(--line);
+  box-shadow: none;
+}
+
+.matrix-cell[data-count="0"] {
+  background: var(--surface);
+  color: var(--line);
+}
+
+.matrix-cell[data-count="1"] {
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  color: var(--accent-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.matrix-cell[data-count="2"] {
+  background: color-mix(in srgb, var(--shuttle) 42%, var(--surface));
+  color: var(--shuttle-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shuttle) 55%, transparent);
+}
+
+.matrix-cell[data-count="3"] {
+  background: color-mix(in srgb, var(--error) 55%, var(--surface));
+  color: #fff;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--error) 65%, transparent);
+}
+
+.matrix-cell:not(.matrix-self):hover {
+  transform: scale(1.1);
+  z-index: 1;
+  position: relative;
+}
+
+.matrix-clickable {
+  cursor: pointer;
+}
+
+.matrix-clickable:hover {
+  transform: scale(1.16);
+  box-shadow: 0 4px 10px -3px #0d1a1340, inset 0 0 0 1.5px var(--ink);
+}
+
+.matrix-table tbody tr:hover th {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.matrix-hint {
+  display: none;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.matrix-hint span {
+  display: inline-block;
+  margin-left: 3px;
+  animation: nudge-x 1.6s var(--ease) infinite;
+}
+
+.matrix-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.matrix-legend .matrix-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  border-radius: 4px;
+  vertical-align: -2px;
+}
+
+.matrix-legend .matrix-swatch[data-count="0"] {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+
+.matrix-legend .matrix-swatch[data-count="1"] {
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.matrix-legend .matrix-swatch[data-count="2"] {
+  background: color-mix(in srgb, var(--shuttle) 42%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shuttle) 55%, transparent);
+}
+
+.matrix-legend .matrix-swatch[data-count="3"] {
+  background: color-mix(in srgb, var(--error) 55%, var(--surface));
+}
+
+@media (max-width: 560px) {
+  .matrix-hint {
+    display: block;
+  }
+}
+
+@keyframes nudge-x {
+  0%, 88%, 100% { transform: translateX(0); }
+  93% { transform: translateX(3px); }
 }
 
 /* ==========================================================================
