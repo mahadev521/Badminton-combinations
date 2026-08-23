@@ -24,19 +24,14 @@ const KNOWN_PLAYERS_KEY = "badmintonKnownPlayers";
 const THEME_STORAGE_KEY = "badmintonTheme";
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 
-const DEFAULT_GAME_COUNT = 12;
-const MIN_GAME_COUNT = 1;
-const MAX_GAME_COUNT = 60;
-
 function playersKey(players) {
   return [...players].sort().join("|");
 }
 
-function newSession(players, gameCount, courtView = "end") {
+function newSession(players, courtView = "end") {
   return {
     key: playersKey(players),
     players,
-    gameCount,
     courtView,
     schedule: [],
     matchStates: {},
@@ -77,8 +72,8 @@ function clearSession() {
   localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
-function saveInputs(playersRaw, gameCount) {
-  localStorage.setItem(INPUTS_STORAGE_KEY, JSON.stringify({ playersRaw, gameCount }));
+function saveInputs(playersRaw) {
+  localStorage.setItem(INPUTS_STORAGE_KEY, JSON.stringify({ playersRaw }));
 }
 
 function loadInputs() {
@@ -336,16 +331,11 @@ function markActiveChips() {
   });
 }
 
-function selectedGameCount() {
-  const raw = Number(document.getElementById("gameCountInput").value);
-  if (!Number.isFinite(raw)) return DEFAULT_GAME_COUNT;
-  return Math.min(MAX_GAME_COUNT, Math.max(MIN_GAME_COUNT, Math.round(raw)));
-}
-
-function setGameCount(value) {
-  const input = document.getElementById("gameCountInput");
-  input.value = String(Math.min(MAX_GAME_COUNT, Math.max(MIN_GAME_COUNT, Math.round(value) || MIN_GAME_COUNT)));
-  updateLineUpMeta();
+/** Fewest games a full partnership cover can ever take: each game locks in 2 pairs. */
+function estimateGameCount(playerCount) {
+  if (playerCount < 4) return 0;
+  const totalPairs = (playerCount * (playerCount - 1)) / 2;
+  return Math.ceil(totalPairs / 2);
 }
 
 /** "8 each" when it divides evenly, otherwise "6–7 each". */
@@ -366,8 +356,13 @@ function updateLineUpMeta() {
   playerBadge.textContent = count === 1 ? "1 player" : `${count} players`;
   playerBadge.classList.toggle("is-invalid", count > 0 && (count < 4 || hasDuplicates));
 
-  const gamesBadge = document.getElementById("gamesHint");
-  gamesBadge.textContent = gamesPerPlayerLabel(count, selectedGameCount());
+  const preview = document.getElementById("gamesPreview");
+  if (count < 4) {
+    preview.textContent = "Add at least 4 players to see how many games it'll take.";
+  } else {
+    const estimate = estimateGameCount(count);
+    preview.textContent = `~${estimate} games so everyone partners with everyone once (${gamesPerPlayerLabel(count, estimate)}).`;
+  }
 
   markActiveChips();
 }
@@ -405,87 +400,35 @@ function makeGameConfigs(players) {
   return configs;
 }
 
-/** Whole-schedule quality, used to pick the best of many random attempts. */
-function evaluateSchedule(schedule, players) {
-  const playerGames = new Map(players.map((p) => [p, 0]));
-  const partnerCount = new Map();
-  const consecutive = new Map(players.map((p) => [p, 0]));
-
-  let maxConsecutive = 0;
-
-  for (const [team1, team2] of schedule) {
-    const participants = new Set([...team1, ...team2]);
-
-    for (const p of players) {
-      if (participants.has(p)) {
-        playerGames.set(p, playerGames.get(p) + 1);
-
-        const newConsecutive = consecutive.get(p) + 1;
-        consecutive.set(p, newConsecutive);
-
-        if (newConsecutive > maxConsecutive) {
-          maxConsecutive = newConsecutive;
-        }
-      } else {
-        consecutive.set(p, 0);
-      }
-    }
-
-    const key1 = pairKey(team1);
-    const key2 = pairKey(team2);
-    partnerCount.set(key1, (partnerCount.get(key1) || 0) + 1);
-    partnerCount.set(key2, (partnerCount.get(key2) || 0) + 1);
-  }
-
-  const games = players.map((p) => playerGames.get(p));
-  const gameImbalance = Math.max(...games) - Math.min(...games);
-
-  let score = gameImbalance * 1000;
-
-  const uniquePartners = partnerCount.size;
-  let repeatedPartnerships = 0;
-  for (const count of partnerCount.values()) {
-    repeatedPartnerships += Math.max(0, count - 1);
-  }
-
-  score += repeatedPartnerships * 500;
-  score -= uniquePartners * 100;
-
-  if (maxConsecutive >= 4) {
-    score += 5000;
-  } else if (maxConsecutive === 3) {
-    score += 1500;
-  } else if (maxConsecutive === 2) {
-    score += 200;
-  }
-
-  return score;
-}
-
 /**
- * Build exactly `gameCount` games for `players`.
+ * Build however many games it takes for every pair of players to partner at
+ * least once — the game count is never chosen by the user, it falls out of
+ * the group size. For `n` players there are n*(n-1)/2 possible partnerships
+ * and each game locks in exactly 2 of them, so n*(n-1)/4 games is the
+ * theoretical floor; the search below tries to land exactly on it.
  *
- * Each game is chosen greedily from every possible foursome-and-pairing, scored
- * as follows (lower is better) — this is the original balancing logic, retargeted
- * from "everyone plays N" to "everyone plays as close to the ideal as the
- * requested game count allows":
+ * Each game is chosen greedily from every possible foursome-and-pairing,
+ * scored as follows (lower is better):
  *
+ *   - 3000                                    per brand-new pair in the team → finish the cover fast
  *   + 100 x (ideal - gamesAfterThisMatch)^2   per player  → even game counts
  *   + 900                                     per player resting again  → spread rests
  *   + 120 x timesAlreadyPaired                per team    → fresh partnerships
  *   -  80                                     per brand-new pair
  *   + random x 20                                         → variety
  *
- * The ten lowest-scoring candidates are kept and one is picked at random, and the
- * whole thing is retried many times keeping the best result by `evaluateSchedule`.
+ * The ten lowest-scoring candidates are kept and one is picked at random. The
+ * whole thing is retried many times, keeping whichever attempt covers every
+ * partnership with the fewest repeats, then the fewest games, then the best
+ * game-count balance.
  *
  * The scoring is inlined over typed arrays with precomputed pair keys: the
  * straightforward version allocated a Set and two sorted key strings per
  * candidate per game per attempt, which froze the page for tens of seconds.
  */
-function generateSchedule(players, gameCount, attempts = DEFAULT_ATTEMPTS) {
+function generateSchedule(players, attempts = DEFAULT_ATTEMPTS) {
   const playerCount = players.length;
-  if (playerCount < 4 || gameCount < 1) return [];
+  if (playerCount < 4) return [];
 
   const configs = makeGameConfigs(players);
   const configCount = configs.length;
@@ -503,14 +446,14 @@ function generateSchedule(players, gameCount, attempts = DEFAULT_ATTEMPTS) {
     configPairKeys[c] = [pairKey(teamA), pairKey(teamB)];
   }
 
-  const idealGames = (gameCount * 4) / playerCount;
-  const gamesCeiling = Math.ceil(idealGames);
-  // Perfectly even only when the player-slots divide by the head count.
-  const bestPossibleSpread = Number.isInteger(idealGames) ? 0 : 1;
+  const totalPairs = (playerCount * (playerCount - 1)) / 2;
+  // Every game locks in at least one new pair or the attempt is abandoned below,
+  // so no attempt can ever run longer than totalPairs games.
+  const maxGames = totalPairs;
 
   const runs = Math.min(
     attempts,
-    Math.max(MIN_ATTEMPTS, Math.floor(WORK_BUDGET / (configCount * gameCount)))
+    Math.max(MIN_ATTEMPTS, Math.floor(WORK_BUDGET / (configCount * Math.max(totalPairs / 2, 1))))
   );
 
   const TOP = 10;
@@ -520,21 +463,21 @@ function generateSchedule(players, gameCount, attempts = DEFAULT_ATTEMPTS) {
   const topConfigs = new Int32Array(TOP);
 
   let best = null;
-  let bestScore = Infinity;
-  let fallback = null;
-  let fallbackKey = Infinity;
+  let bestKey = Infinity;
 
   for (let run = 0; run < runs; run += 1) {
     const schedule = [];
     const partnerCount = new Map();
+    let coveredPairs = 0;
     playerGames.fill(0);
     restStreak.fill(0);
 
-    while (schedule.length < gameCount) {
-      /* Every candidate shares the same sum over all players and differs only for
-         its own four, so compute the shared part once. A player who plays turns
-         (ideal-games)^2 into (ideal-games-1)^2, i.e. adds 1 - 2*(ideal-games),
-         and drops their rest penalty. Algebraically exact, not an approximation. */
+    while (coveredPairs < totalPairs && schedule.length < maxGames) {
+      // Balance target drifts upward as the schedule grows, since the final
+      // length isn't known ahead of time.
+      const idealGames = ((schedule.length + 1) * 4) / playerCount;
+      const gamesCeiling = Math.ceil(idealGames);
+
       let baseSquares = 0;
       let baseRest = 0;
       for (let i = 0; i < playerCount; i += 1) {
@@ -545,11 +488,33 @@ function generateSchedule(players, gameCount, attempts = DEFAULT_ATTEMPTS) {
 
       let topCount = 0;
 
-      /* Pass 0 keeps every player at or under the ceiling. If that leaves nothing
-         playable (possible when the remaining allowance bunches on fewer than four
-         players), pass 1 drops the ceiling so the requested count is still met. */
-      for (let pass = 0; pass < 2 && topCount === 0; pass += 1) {
-        const useCeiling = pass === 0;
+      /* Partnership freshness is a hard filter, not just a scoring nudge: a
+         repeat pairing is only ever considered once every option with more
+         fresh pairs is exhausted, and a pair is never pushed to a third
+         meeting while any pair still has room under a second. Ceiling works
+         the same way underneath that — try the strict cap first, then relax
+         it. Eight passes, tried in order until one yields candidates:
+           0: both pairs fresh, respecting the ceiling
+           1: both pairs fresh, ceiling relaxed
+           2: at least one fresh pair, respecting the ceiling
+           3: at least one fresh pair, ceiling relaxed
+           4: neither pair repeated more than once yet, respecting the ceiling
+           5: neither pair repeated more than once yet, ceiling relaxed
+           6: any pairing, respecting the ceiling    (3rd+ meetings allowed)
+           7: any pairing, ceiling relaxed           (3rd+ meetings allowed) */
+      const passConfigs = [
+        { minFresh: 2, maxCount: Infinity, useCeiling: true },
+        { minFresh: 2, maxCount: Infinity, useCeiling: false },
+        { minFresh: 1, maxCount: Infinity, useCeiling: true },
+        { minFresh: 1, maxCount: Infinity, useCeiling: false },
+        { minFresh: 0, maxCount: 1, useCeiling: true },
+        { minFresh: 0, maxCount: 1, useCeiling: false },
+        { minFresh: 0, maxCount: Infinity, useCeiling: true },
+        { minFresh: 0, maxCount: Infinity, useCeiling: false },
+      ];
+
+      for (let pass = 0; pass < passConfigs.length && topCount === 0; pass += 1) {
+        const { minFresh, maxCount, useCeiling } = passConfigs[pass];
         let worstTop = Infinity;
 
         for (let c = 0; c < configCount; c += 1) {
@@ -568,6 +533,13 @@ function generateSchedule(players, gameCount, attempts = DEFAULT_ATTEMPTS) {
             continue;
           }
 
+          const keys = configPairKeys[c];
+          const count0 = partnerCount.get(keys[0]) || 0;
+          const count1 = partnerCount.get(keys[1]) || 0;
+          const freshPairs = (count0 === 0 ? 1 : 0) + (count1 === 0 ? 1 : 0);
+
+          if (freshPairs < minFresh || count0 > maxCount || count1 > maxCount) continue;
+
           const squares = baseSquares
             + 1 - 2 * (idealGames - g0)
             + 1 - 2 * (idealGames - g1)
@@ -582,12 +554,11 @@ function generateSchedule(players, gameCount, attempts = DEFAULT_ATTEMPTS) {
 
           let score = squares * 100 + rest;
 
-          const keys = configPairKeys[c];
-          for (let k = 0; k < 2; k += 1) {
-            const count = partnerCount.get(keys[k]) || 0;
-            score += count * 120;
-            if (count === 0) score -= 80;
-          }
+          score += count0 * 120 + (count0 === 0 ? -80 : 0);
+          score += count1 * 120 + (count1 === 0 ? -80 : 0);
+          // Covering brand-new pairs outranks everything else so the schedule
+          // finishes as close to the theoretical floor as possible.
+          score -= freshPairs * 3000;
 
           score += Math.random() * 20;
 
@@ -628,34 +599,35 @@ function generateSchedule(players, gameCount, attempts = DEFAULT_ATTEMPTS) {
       }
 
       const keys = configPairKeys[chosen];
+      if (!partnerCount.has(keys[0])) coveredPairs += 1;
+      if (!partnerCount.has(keys[1])) coveredPairs += 1;
       partnerCount.set(keys[0], (partnerCount.get(keys[0]) || 0) + 1);
       partnerCount.set(keys[1], (partnerCount.get(keys[1]) || 0) + 1);
     }
 
-    if (schedule.length < gameCount) continue;
+    if (coveredPairs < totalPairs) continue;
 
     let minGames = Infinity;
-    let maxGames = -Infinity;
+    let maxGames2 = -Infinity;
     for (let i = 0; i < playerCount; i += 1) {
       if (playerGames[i] < minGames) minGames = playerGames[i];
-      if (playerGames[i] > maxGames) maxGames = playerGames[i];
+      if (playerGames[i] > maxGames2) maxGames2 = playerGames[i];
     }
 
-    const spread = maxGames - minGames;
-    const finalScore = evaluateSchedule(schedule, players);
+    let repeated = 0;
+    for (const count of partnerCount.values()) {
+      repeated += Math.max(0, count - 1);
+    }
 
-    if (spread <= bestPossibleSpread) {
-      if (finalScore < bestScore) {
-        bestScore = finalScore;
-        best = schedule;
-      }
-    } else if (spread * 1e9 + finalScore < fallbackKey) {
-      fallbackKey = spread * 1e9 + finalScore;
-      fallback = schedule;
+    // Fewest repeats wins outright, then fewest games, then the tightest game-count spread.
+    const key = repeated * 1e8 + schedule.length * 1e4 + (maxGames2 - minGames);
+    if (key < bestKey) {
+      bestKey = key;
+      best = schedule;
     }
   }
 
-  return best || fallback || [];
+  return best || [];
 }
 
 /* --------------------------------------------------------------------------
@@ -848,6 +820,89 @@ function renderEmptyState(message = "No schedule yet") {
   `;
 }
 
+/** Tallies games-played and partner counts for a built schedule. */
+function computeScheduleStats(schedule, players) {
+  const playerGames = new Map(players.map((p) => [p, 0]));
+  const partnerCount = new Map();
+
+  for (const [team1, team2] of schedule) {
+    for (const p of [...team1, ...team2]) {
+      playerGames.set(p, (playerGames.get(p) || 0) + 1);
+    }
+    partnerCount.set(pairKey(team1), (partnerCount.get(pairKey(team1)) || 0) + 1);
+    partnerCount.set(pairKey(team2), (partnerCount.get(pairKey(team2)) || 0) + 1);
+  }
+
+  return { playerGames, partnerCount };
+}
+
+/** Bigger, more legible cells for small groups; shrinks gracefully as the group grows. */
+function matrixSizing(playerCount) {
+  const tiers = [
+    { max: 6, cell: 50, header: 116, headerFont: 13, row: 90, font: 14 },
+    { max: 8, cell: 44, header: 104, headerFont: 12.5, row: 82, font: 13 },
+    { max: 10, cell: 39, header: 94, headerFont: 12, row: 76, font: 12.5 },
+    { max: 14, cell: 34, header: 86, headerFont: 11.5, row: 70, font: 12 },
+    { max: 18, cell: 29, header: 78, headerFont: 11, row: 64, font: 11.5 },
+    { max: Infinity, cell: 25, header: 70, headerFont: 10.5, row: 58, font: 11 },
+  ];
+  const tier = tiers.find((t) => playerCount <= t.max);
+
+  const compact = window.matchMedia("(max-width: 560px)").matches;
+  const scale = compact ? 0.86 : 1;
+
+  return {
+    cell: Math.round(tier.cell * scale),
+    header: Math.round(tier.header * scale),
+    headerFont: (tier.headerFont * scale).toFixed(1),
+    row: Math.round(tier.row * scale),
+    font: (tier.font * scale).toFixed(1),
+  };
+}
+
+/** Player x player heatmap: how many games each pair has partnered together. */
+function partnershipMatrixHtml(players, partnerCount) {
+  const sizing = matrixSizing(players.length);
+  const frameStyle = `--matrix-cell:${sizing.cell}px; --matrix-header:${sizing.header}px; `
+    + `--matrix-header-font:${sizing.headerFont}px; --matrix-row:${sizing.row}px; `
+    + `--matrix-font:${sizing.font}px;`;
+
+  const header = players
+    .map((p) => `<th scope="col"><span title="${escapeHtml(p)}">${escapeHtml(p)}</span></th>`)
+    .join("");
+
+  const body = players
+    .map((rowPlayer) => {
+      const cells = players
+        .map((colPlayer) => {
+          if (colPlayer === rowPlayer) return `<td class="matrix-cell matrix-self">·</td>`;
+
+          const count = partnerCount.get(pairKey([rowPlayer, colPlayer])) || 0;
+          const bucket = count >= 3 ? 3 : count;
+          const label = count > 0
+            ? `${rowPlayer} + ${colPlayer}: ${count} game${count === 1 ? "" : "s"} · tap to view`
+            : `${rowPlayer} + ${colPlayer}: never partnered yet`;
+          return `<td class="matrix-cell${count > 0 ? " matrix-clickable" : ""}" data-count="${bucket}" data-row="${escapeHtml(rowPlayer)}" data-col="${escapeHtml(colPlayer)}" title="${escapeHtml(label)}">${count || ""}</td>`;
+        })
+        .join("");
+
+      return `<tr><th scope="row" title="${escapeHtml(rowPlayer)}">${escapeHtml(rowPlayer)}</th>${cells}</tr>`;
+    })
+    .join("");
+
+  return `
+    <div class="matrix-frame" style="${frameStyle}">
+      <div class="matrix-scroll">
+        <table class="matrix-table">
+          <thead><tr><th class="matrix-corner" aria-hidden="true"></th>${header}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+      <p class="matrix-hint" aria-hidden="true">Swipe to see everyone <span>→</span></p>
+    </div>
+  `;
+}
+
 function renderSchedule(session) {
   const players = session.players;
   const schedule = session.schedule;
@@ -860,19 +915,11 @@ function renderSchedule(session) {
   const completedGameIndexes = new Set(session.completedGameIndexes);
   if (!session.matchStates) session.matchStates = {};
 
-  const playerGames = new Map(players.map((p) => [p, 0]));
-  const partnerCount = new Map();
+  const { playerGames, partnerCount } = computeScheduleStats(schedule, players);
 
   schedule.forEach(([team1, team2], idx) => {
     const participants = new Set([...team1, ...team2]);
     const rest = players.filter((p) => !participants.has(p));
-
-    for (const p of participants) {
-      playerGames.set(p, playerGames.get(p) + 1);
-    }
-
-    partnerCount.set(pairKey(team1), (partnerCount.get(pairKey(team1)) || 0) + 1);
-    partnerCount.set(pairKey(team2), (partnerCount.get(pairKey(team2)) || 0) + 1);
 
     let state = session.matchStates[idx];
     if (!state) {
@@ -1158,18 +1205,17 @@ function renderSchedule(session) {
 
   regenerateBtn.disabled = false;
   regenerateBtn.onclick = async () => {
-    const requested = selectedGameCount();
     if (playedCount > 0) {
       const ok = await confirmDialog({
         title: "Build a new schedule?",
-        message: `${playedCount} finished game${playedCount === 1 ? "" : "s"} will be discarded and ${requested} fresh match-up${requested === 1 ? "" : "s"} generated.`,
+        message: `${playedCount} finished game${playedCount === 1 ? "" : "s"} will be discarded and a fresh set of match-ups generated.`,
         confirmLabel: "Regenerate",
         emoji: "🎲",
         danger: true,
       });
       if (!ok) return;
     }
-    await withBusyState(regenerateBtn, () => buildSchedule(session, requested));
+    await withBusyState(regenerateBtn, () => buildSchedule(session));
   };
 
   const remaining = schedule.length - playedCount;
@@ -1244,6 +1290,12 @@ function updateNavControls(session) {
   courtViewChoices.forEach((choice) => {
     choice.disabled = active;
   });
+
+  // Names are locked in once a session starts — editing them wouldn't match the schedule below.
+  document.getElementById("playersInput").disabled = active;
+  document.getElementById("demoBtn").disabled = active;
+  document.getElementById("shuffleNamesBtn").disabled = active;
+  document.getElementById("knownPlayersChips").classList.toggle("is-disabled", active);
 }
 
 function selectedCourtView() {
@@ -1258,14 +1310,65 @@ function setSelectedCourtView(courtView) {
 function showSession(session) {
   activeSession = session;
   renderSchedule(session);
+  renderPartnershipMapPanel(session);
   saveSession(session);
   updateNavControls(session);
 }
 
-/** Generate `gameCount` fresh match-ups into `session`, replacing anything there. */
-function buildSchedule(session, gameCount) {
-  session.gameCount = gameCount;
-  session.schedule = generateSchedule(session.players, gameCount, DEFAULT_ATTEMPTS);
+/** First game where `a` and `b` are on the same team, preferring an unplayed one. */
+function findMatchIndexForPair(session, a, b) {
+  const completed = new Set(session.completedGameIndexes);
+  let firstAny = -1;
+
+  for (let i = 0; i < session.schedule.length; i += 1) {
+    const [team1, team2] = session.schedule[i];
+    const together = (team1.includes(a) && team1.includes(b)) || (team2.includes(a) && team2.includes(b));
+    if (!together) continue;
+
+    if (firstAny === -1) firstAny = i;
+    if (!completed.has(i)) return i;
+  }
+
+  return firstAny;
+}
+
+/** Renders the read-only partnership heatmap into the Line-up tab. */
+function renderPartnershipMapPanel(session) {
+  const panel = document.getElementById("partnershipMapPanel");
+  const mount = document.getElementById("partnershipMapMount");
+  const preview = document.getElementById("gamesPreview");
+
+  if (!session || !session.schedule.length) {
+    panel.hidden = true;
+    mount.innerHTML = "";
+    if (preview) preview.hidden = false;
+    return;
+  }
+
+  if (preview) preview.hidden = true;
+  panel.hidden = false;
+  const { partnerCount } = computeScheduleStats(session.schedule, session.players);
+  mount.innerHTML = partnershipMatrixHtml(session.players, partnerCount);
+}
+
+document.getElementById("partnershipMapMount").addEventListener("click", (event) => {
+  const cell = event.target.closest(".matrix-clickable");
+  if (!cell || !activeSession) return;
+
+  const idx = findMatchIndexForPair(activeSession, cell.dataset.row, cell.dataset.col);
+  if (idx < 0) return;
+
+  haptic(6);
+  activeSession.expandedGameIndex = idx;
+  saveSession(activeSession);
+  setView("play");
+  showSession(activeSession);
+  scrollToExpandedGame();
+});
+
+/** Generate a fresh full-partnership-coverage schedule into `session`. */
+function buildSchedule(session) {
+  session.schedule = generateSchedule(session.players, DEFAULT_ATTEMPTS);
   session.matchStates = {};
   session.completedGameIndexes = [];
   session.initialComboOrder = null;
@@ -1364,37 +1467,18 @@ document.getElementById("startBtn").addEventListener("click", async () => {
     return;
   }
 
-  const gameCount = selectedGameCount();
-  saveInputs(document.getElementById("playersInput").value, gameCount);
+  saveInputs(document.getElementById("playersInput").value);
   rememberKnownPlayers(players);
   renderKnownPlayerChips();
 
-  const session = newSession(players, gameCount, selectedCourtView());
-  await withBusyState(startBtn, () => buildSchedule(session, gameCount));
+  const session = newSession(players, selectedCourtView());
+  await withBusyState(startBtn, () => buildSchedule(session));
 });
 
 document.getElementById("playersInput").addEventListener("input", () => {
   updateLineUpMeta();
   const errorText = document.getElementById("errorText");
   if (errorText.textContent) errorText.textContent = "";
-});
-
-document.getElementById("gameCountInput").addEventListener("input", updateLineUpMeta);
-document.getElementById("gameCountInput").addEventListener("change", () => {
-  setGameCount(selectedGameCount());
-  saveInputs(document.getElementById("playersInput").value, selectedGameCount());
-});
-
-document.getElementById("gamesMinus").addEventListener("click", () => {
-  haptic(5);
-  setGameCount(selectedGameCount() - 1);
-  saveInputs(document.getElementById("playersInput").value, selectedGameCount());
-});
-
-document.getElementById("gamesPlus").addEventListener("click", () => {
-  haptic(5);
-  setGameCount(selectedGameCount() + 1);
-  saveInputs(document.getElementById("playersInput").value, selectedGameCount());
 });
 
 document.getElementById("knownPlayersChips").addEventListener("click", (event) => {
@@ -1438,8 +1522,8 @@ document.getElementById("resetSeasonBtn").addEventListener("click", async () => 
   localStorage.removeItem(INPUTS_STORAGE_KEY);
 
   document.getElementById("playersInput").value = "";
-  setGameCount(DEFAULT_GAME_COUNT);
   document.getElementById("output").innerHTML = renderEmptyState();
+  renderPartnershipMapPanel(null);
 
   const resetCurrentSetBtn = document.getElementById("resetCurrentSetBtn");
   resetCurrentSetBtn.disabled = true;
@@ -1479,13 +1563,12 @@ window.addEventListener("DOMContentLoaded", () => {
     haptic(6);
   });
 
-  // Sets were replaced by a plain game count; drop any state from that schema.
+  // Sets were replaced by a full partnership cover; drop any state from that schema.
   localStorage.removeItem(LEGACY_SEASON_KEY);
 
   const savedInputs = loadInputs();
   if (savedInputs) {
     document.getElementById("playersInput").value = savedInputs.playersRaw || "";
-    if (savedInputs.gameCount) setGameCount(savedInputs.gameCount);
   }
 
   renderKnownPlayerChips();
@@ -1496,12 +1579,12 @@ window.addEventListener("DOMContentLoaded", () => {
 
   if (session) {
     setSelectedCourtView(session.courtView || "end");
-    if (session.gameCount) setGameCount(session.gameCount);
     showSession(session);
     if (isCompactLayout()) setView("play");
   } else {
     activeSession = null;
     document.getElementById("output").innerHTML = renderEmptyState();
+    renderPartnershipMapPanel(null);
     updateNavControls(null);
     updateProgress(null);
   }
