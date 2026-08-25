@@ -352,6 +352,52 @@ h3 {
   flex-shrink: 0;
 }
 
+.sets-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+}
+
+.sets-bar-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-right: 2px;
+}
+
+#setsCountLabel {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 44px;
+  text-align: center;
+  color: var(--ink);
+}
+
+.set-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.set-divider::before,
+.set-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
 /* ==========================================================================
    Forms
    ========================================================================== */
@@ -1283,6 +1329,16 @@ button:disabled {
 }
 
 .first-serve-field > strong {
+  justify-content: center;
+}
+
+/* Court rotate */
+.court-rotate-row {
+  display: flex;
+}
+
+.court-rotate-row .court-rotate-btn {
+  flex: 1;
   justify-content: center;
 }
 

@@ -38,6 +38,8 @@ function newSession(players, courtView = "end") {
     completedGameIndexes: [],
     expandedGameIndex: null,
     initialComboOrder: null,
+    setsCount: 1,
+    setBreaks: [0],
     updatedAt: Date.now(),
   };
 }
@@ -57,6 +59,8 @@ function loadSession(players) {
 
     if (!state.matchStates) state.matchStates = {};
     if (!Array.isArray(state.completedGameIndexes)) state.completedGameIndexes = [];
+    if (!state.setsCount) state.setsCount = 1;
+    if (!Array.isArray(state.setBreaks)) state.setBreaks = [0];
     return state;
   } catch {
     return null;
@@ -630,6 +634,212 @@ function generateSchedule(players, attempts = DEFAULT_ATTEMPTS) {
   return best || [];
 }
 
+/** Generate one additional set of games, using existing pair counts as a prior.
+ *  Pairs already played together get a scoring penalty so the new set
+ *  spreads partnerships as evenly as possible across the whole session.
+ *  Coverage tracking is per-set only; the pass / ceiling logic mirrors
+ *  generateSchedule exactly.
+ */
+// priorPlayerGames: Map<playerName, gamesPlayedSoFar> from all previous sets.
+function generateAdditionalSet(players, priorCounts, priorPlayerGames, attempts = DEFAULT_ATTEMPTS) {
+  const playerCount = players.length;
+  if (playerCount < 4) return [];
+
+  const configs = makeGameConfigs(players);
+  const configCount = configs.length;
+  const playerIndex = new Map(players.map((p, i) => [p, i]));
+
+  const configPlayers = new Int32Array(configCount * 4);
+  const configPairKeys = new Array(configCount);
+  for (let c = 0; c < configCount; c += 1) {
+    const [teamA, teamB] = configs[c];
+    const o = c * 4;
+    configPlayers[o] = playerIndex.get(teamA[0]);
+    configPlayers[o + 1] = playerIndex.get(teamA[1]);
+    configPlayers[o + 2] = playerIndex.get(teamB[0]);
+    configPlayers[o + 3] = playerIndex.get(teamB[1]);
+    configPairKeys[c] = [pairKey(teamA), pairKey(teamB)];
+  }
+
+  const totalPairs = (playerCount * (playerCount - 1)) / 2;
+  const maxGames = totalPairs;
+
+  const runs = Math.min(
+    attempts,
+    Math.max(MIN_ATTEMPTS, Math.floor(WORK_BUDGET / (configCount * Math.max(totalPairs / 2, 1))))
+  );
+
+  // Pre-build prior game counts as a typed array for fast reset each run.
+  const priorGames = new Int32Array(playerCount);
+  for (const [name, count] of priorPlayerGames) {
+    const i = playerIndex.get(name);
+    if (i !== undefined) priorGames[i] = count;
+  }
+  // Total player-slots already used = 4 × number of prior games.
+  const priorGameSlots = priorGames.reduce((a, b) => a + b, 0);
+
+  const TOP = 10;
+  const playerGames = new Int32Array(playerCount);
+  const restStreak = new Int32Array(playerCount);
+  const topScores = new Float64Array(TOP);
+  const topConfigs = new Int32Array(TOP);
+
+  const passConfigs = [
+    { minFresh: 2, maxCount: Infinity, useCeiling: true },
+    { minFresh: 2, maxCount: Infinity, useCeiling: false },
+    { minFresh: 1, maxCount: Infinity, useCeiling: true },
+    { minFresh: 1, maxCount: Infinity, useCeiling: false },
+    { minFresh: 0, maxCount: 1, useCeiling: true },
+    { minFresh: 0, maxCount: 1, useCeiling: false },
+    { minFresh: 0, maxCount: Infinity, useCeiling: true },
+    { minFresh: 0, maxCount: Infinity, useCeiling: false },
+  ];
+
+  let best = null;
+  let bestKey = Infinity;
+
+  for (let run = 0; run < runs; run += 1) {
+    const schedule = [];
+    // allCounts = prior + this-set counts; used for scoring to penalise repeats
+    const allCounts = new Map(priorCounts);
+    // setCounts tracks what has been paired within THIS set (freshness + coverage)
+    const setCounts = new Map();
+    let coveredThisSet = 0;
+    // Seed with prior totals so balance is enforced across all sets, not just within one.
+    for (let i = 0; i < playerCount; i += 1) playerGames[i] = priorGames[i];
+    restStreak.fill(0);
+
+    while (coveredThisSet < totalPairs && schedule.length < maxGames) {
+      // Global ideal: total player-slots (prior + this set so far + this game) / players.
+      const idealGames = (priorGameSlots + (schedule.length + 1) * 4) / playerCount;
+      const gamesCeiling = Math.ceil(idealGames);
+
+      let baseSquares = 0;
+      let baseRest = 0;
+      for (let i = 0; i < playerCount; i += 1) {
+        const delta = idealGames - playerGames[i];
+        baseSquares += delta * delta;
+        if (restStreak[i] > 0) baseRest += 900;
+      }
+
+      let topCount = 0;
+
+      for (let pass = 0; pass < passConfigs.length && topCount === 0; pass += 1) {
+        const { minFresh, maxCount, useCeiling } = passConfigs[pass];
+        let worstTop = Infinity;
+
+        for (let c = 0; c < configCount; c += 1) {
+          const o = c * 4;
+          const p0 = configPlayers[o];
+          const p1 = configPlayers[o + 1];
+          const p2 = configPlayers[o + 2];
+          const p3 = configPlayers[o + 3];
+
+          if (useCeiling && (
+            playerGames[p0] >= gamesCeiling ||
+            playerGames[p1] >= gamesCeiling ||
+            playerGames[p2] >= gamesCeiling ||
+            playerGames[p3] >= gamesCeiling
+          )) continue;
+
+          const keys = configPairKeys[c];
+          // "fresh" = not yet seen in this set
+          const sc0 = setCounts.get(keys[0]) || 0;
+          const sc1 = setCounts.get(keys[1]) || 0;
+          const freshPairs = (sc0 === 0 ? 1 : 0) + (sc1 === 0 ? 1 : 0);
+
+          if (freshPairs < minFresh || sc0 > maxCount || sc1 > maxCount) continue;
+
+          const squares = baseSquares
+            + 1 - 2 * (idealGames - playerGames[p0])
+            + 1 - 2 * (idealGames - playerGames[p1])
+            + 1 - 2 * (idealGames - playerGames[p2])
+            + 1 - 2 * (idealGames - playerGames[p3]);
+
+          let rest = baseRest;
+          if (restStreak[p0] > 0) rest -= 900;
+          if (restStreak[p1] > 0) rest -= 900;
+          if (restStreak[p2] > 0) rest -= 900;
+          if (restStreak[p3] > 0) rest -= 900;
+
+          let score = squares * 100 + rest;
+
+          // Penalise pairs with a high session-total count (includes prior sets)
+          const ac0 = allCounts.get(keys[0]) || 0;
+          const ac1 = allCounts.get(keys[1]) || 0;
+          score += ac0 * 120 + (sc0 === 0 ? -80 : 0);
+          score += ac1 * 120 + (sc1 === 0 ? -80 : 0);
+          score -= freshPairs * 3000;
+          score += Math.random() * 20;
+
+          if (topCount < TOP || score < worstTop) {
+            let pos = topCount < TOP ? topCount : TOP - 1;
+            while (pos > 0 && topScores[pos - 1] > score) {
+              topScores[pos] = topScores[pos - 1];
+              topConfigs[pos] = topConfigs[pos - 1];
+              pos -= 1;
+            }
+            topScores[pos] = score;
+            topConfigs[pos] = c;
+            if (topCount < TOP) topCount += 1;
+            worstTop = topScores[topCount - 1];
+          }
+        }
+      }
+
+      if (topCount === 0) break;
+
+      const chosen = topConfigs[Math.floor(Math.random() * topCount)];
+      const o = chosen * 4;
+      const s0 = configPlayers[o];
+      const s1 = configPlayers[o + 1];
+      const s2 = configPlayers[o + 2];
+      const s3 = configPlayers[o + 3];
+
+      schedule.push(configs[chosen]);
+
+      for (let i = 0; i < playerCount; i += 1) {
+        if (i === s0 || i === s1 || i === s2 || i === s3) {
+          playerGames[i] += 1;
+          restStreak[i] = 0;
+        } else {
+          restStreak[i] += 1;
+        }
+      }
+
+      const keys = configPairKeys[chosen];
+      if (!setCounts.has(keys[0])) coveredThisSet += 1;
+      if (!setCounts.has(keys[1])) coveredThisSet += 1;
+      setCounts.set(keys[0], (setCounts.get(keys[0]) || 0) + 1);
+      setCounts.set(keys[1], (setCounts.get(keys[1]) || 0) + 1);
+      allCounts.set(keys[0], (allCounts.get(keys[0]) || 0) + 1);
+      allCounts.set(keys[1], (allCounts.get(keys[1]) || 0) + 1);
+    }
+
+    if (coveredThisSet < totalPairs) continue;
+
+    let minG = Infinity;
+    let maxG = -Infinity;
+    for (let i = 0; i < playerCount; i += 1) {
+      if (playerGames[i] < minG) minG = playerGames[i];
+      if (playerGames[i] > maxG) maxG = playerGames[i];
+    }
+
+    let repeated = 0;
+    for (const count of setCounts.values()) {
+      repeated += Math.max(0, count - 1);
+    }
+
+    const key = repeated * 1e8 + schedule.length * 1e4 + (maxG - minG);
+    if (key < bestKey) {
+      bestKey = key;
+      best = schedule;
+    }
+  }
+
+  return best || [];
+}
+
 /* --------------------------------------------------------------------------
    Match state & service rules
    -------------------------------------------------------------------------- */
@@ -646,6 +856,7 @@ function createMatchState(topTeam, bottomTeam, targetScore = 11) {
     courtServingTeam: "",
     courtView: "end",
     courtServingPlacement: "bottom",
+    courtFlipped: false,
     topPositions: { left: topTeam[0], right: topTeam[1] },
     bottomPositions: { left: bottomTeam[0], right: bottomTeam[1] },
     undoStack: [],
@@ -918,6 +1129,16 @@ function renderSchedule(session) {
   const { playerGames, partnerCount } = computeScheduleStats(schedule, players);
 
   schedule.forEach(([team1, team2], idx) => {
+    // Insert a visual divider at the start of every set after the first
+    const setBreaks = session.setBreaks || [0];
+    const setIdx = setBreaks.indexOf(idx);
+    if (setIdx > 0) {
+      const divider = document.createElement("div");
+      divider.className = "set-divider";
+      divider.innerHTML = `<span>Set ${setIdx + 1}</span>`;
+      output.appendChild(divider);
+    }
+
     const participants = new Set([...team1, ...team2]);
     const rest = players.filter((p) => !participants.has(p));
 
@@ -967,10 +1188,16 @@ function renderSchedule(session) {
       const courtServingTeam = match.courtServingTeam || "top";
       const alternateTeam = courtServingTeam === "top" ? "bottom" : "top";
       const servingStartsPrimary = servingPlacement === "top" || servingPlacement === "left";
-      const primaryTeam = servingStartsPrimary ? courtServingTeam : alternateTeam;
-      const secondaryTeam = primaryTeam === "top" ? "bottom" : "top";
+      let primaryTeam = servingStartsPrimary ? courtServingTeam : alternateTeam;
+      let secondaryTeam = primaryTeam === "top" ? "bottom" : "top";
+      if (match.courtFlipped) { [primaryTeam, secondaryTeam] = [secondaryTeam, primaryTeam]; }
       const primaryPositions = primaryTeam === "top" ? match.topPositions : match.bottomPositions;
       const secondaryPositions = secondaryTeam === "top" ? match.topPositions : match.bottomPositions;
+      // In back-view a 180° flip also mirrors left↔right; side-view CSS nth-child reordering already handles it
+      const flipPos = (pos) => ({ left: pos.right, right: pos.left });
+      const needsMirror = match.courtFlipped && courtView !== "side";
+      const displayPrimaryPositions = needsMirror ? flipPos(primaryPositions) : primaryPositions;
+      const displaySecondaryPositions = needsMirror ? flipPos(secondaryPositions) : secondaryPositions;
       const primaryLabel = hasServer ? (servingTeam === primaryTeam ? "Serving" : "Receiving") : "Team";
       const secondaryLabel = hasServer ? (servingTeam === secondaryTeam ? "Serving" : "Receiving") : "Team";
       const primaryButtonTeam = primaryTeam === "top" ? team1 : team2;
@@ -1030,10 +1257,15 @@ function renderSchedule(session) {
             <strong>${escapeHtml(match.firstServer)} <span class="dir" aria-hidden="true">→</span><span class="sr-only">to</span> ${escapeHtml(match.firstReceiver)}</strong>
           </div>
         </div>
+        <div class="court-rotate-row">
+          <button type="button" class="ghost mini court-rotate-btn" ${started ? "disabled" : ""} title="Swap which team appears at each end of the court">
+            <span aria-hidden="true">${match.courtFlipped ? "🔄" : "↕️"}</span> Rotate Court
+          </button>
+        </div>
         <div class="court ${courtView === "side" ? "court-side-view" : "court-end-view"}">
-          ${courtSideHtml(primaryLabel, primaryPositions, match)}
+          ${courtSideHtml(primaryLabel, displayPrimaryPositions, match)}
           <div class="net" aria-hidden="true"><span>NET</span></div>
-          ${courtSideHtml(secondaryLabel, secondaryPositions, match)}
+          ${courtSideHtml(secondaryLabel, displaySecondaryPositions, match)}
         </div>
         <p class="service-note">
           <span class="service-callout-text">${match.server && match.receiver
@@ -1084,6 +1316,11 @@ function renderSchedule(session) {
 
       scorer.querySelector(".primary-point").addEventListener("click", addPoint(primaryTeam));
       scorer.querySelector(".secondary-point").addEventListener("click", addPoint(secondaryTeam));
+
+      scorer.querySelector(".court-rotate-btn").addEventListener("click", () => {
+        haptic(8);
+        update((active) => { active.courtFlipped = !active.courtFlipped; });
+      });
 
       scorer.querySelector(".undo-btn").addEventListener("click", () => {
         haptic(6);
@@ -1280,6 +1517,10 @@ function updateNavControls(session) {
   const startBtn = document.getElementById("startBtn");
   const regenerateBtn = document.getElementById("regenerateBtn");
   const courtViewChoices = document.querySelectorAll('input[name="courtView"]');
+  const setsBar = document.getElementById("setsBar");
+  const decSetsBtn = document.getElementById("decSetsBtn");
+  const incSetsBtn = document.getElementById("incSetsBtn");
+  const setsCountLabel = document.getElementById("setsCountLabel");
   const active = Boolean(session);
 
   startBtn.disabled = active;
@@ -1296,6 +1537,36 @@ function updateNavControls(session) {
   document.getElementById("demoBtn").disabled = active;
   document.getElementById("shuffleNamesBtn").disabled = active;
   document.getElementById("knownPlayersChips").classList.toggle("is-disabled", active);
+
+  if (!setsBar) return;
+  setsBar.hidden = !active;
+
+  if (active && session) {
+    const count = session.setsCount || 1;
+    setsCountLabel.textContent = count === 1 ? "1 Set" : `${count} Sets`;
+
+    const lastStart = session.setBreaks ? session.setBreaks[session.setBreaks.length - 1] : 0;
+    const anyPlayedInLast = (session.completedGameIndexes || []).some((i) => i >= lastStart);
+    decSetsBtn.disabled = count <= 1 || anyPlayedInLast;
+
+    decSetsBtn.onclick = () => {
+      if (!activeSession) return;
+      const ok = removeLastSet(activeSession);
+      if (ok) {
+        haptic(6);
+        saveSession(activeSession);
+        showSession(activeSession);
+        toast("Last set removed", "↺");
+      } else {
+        toast("Can't remove — games already played", "⚠️", 2000);
+      }
+    };
+
+    incSetsBtn.onclick = () => {
+      if (!activeSession) return;
+      withBusyState(incSetsBtn, () => addSet(activeSession));
+    };
+  }
 }
 
 function selectedCourtView() {
@@ -1366,6 +1637,41 @@ document.getElementById("partnershipMapMount").addEventListener("click", (event)
   scrollToExpandedGame();
 });
 
+/** Append one more full-coverage set to the existing session schedule. */
+function addSet(session) {
+  const { partnerCount, playerGames: priorPlayerGames } = computeScheduleStats(session.schedule, session.players);
+  const newGames = generateAdditionalSet(session.players, partnerCount, priorPlayerGames);
+  if (!newGames.length) {
+    toast("Couldn't generate another set", "⚠️");
+    return;
+  }
+  const breakIdx = session.schedule.length;
+  session.schedule = [...session.schedule, ...newGames];
+  session.setsCount = (session.setsCount || 1) + 1;
+  session.setBreaks = [...(session.setBreaks || [0]), breakIdx];
+  saveSession(session);
+  showSession(session);
+  toast(`Set ${session.setsCount} added · ${newGames.length} more games`, "🏸");
+}
+
+/** Remove the last set if none of its games have been scored yet. */
+function removeLastSet(session) {
+  const count = session.setsCount || 1;
+  if (count <= 1 || !session.setBreaks) return false;
+  const lastStart = session.setBreaks[session.setBreaks.length - 1];
+  const anyPlayed = (session.completedGameIndexes || []).some((i) => i >= lastStart);
+  if (anyPlayed) return false;
+  const totalBefore = session.schedule.length;
+  for (let i = lastStart; i < totalBefore; i += 1) {
+    delete session.matchStates[i];
+  }
+  session.schedule = session.schedule.slice(0, lastStart);
+  session.setsCount = count - 1;
+  session.setBreaks = session.setBreaks.slice(0, -1);
+  if ((session.expandedGameIndex || 0) >= lastStart) session.expandedGameIndex = null;
+  return true;
+}
+
 /** Generate a fresh full-partnership-coverage schedule into `session`. */
 function buildSchedule(session) {
   session.schedule = generateSchedule(session.players, DEFAULT_ATTEMPTS);
@@ -1373,6 +1679,8 @@ function buildSchedule(session) {
   session.completedGameIndexes = [];
   session.initialComboOrder = null;
   session.expandedGameIndex = session.schedule.length ? 0 : null;
+  session.setsCount = 1;
+  session.setBreaks = [0];
   renderedScores.clear();
 
   saveSession(session);

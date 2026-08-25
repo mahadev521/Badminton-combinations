@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=55" />
+    <link rel="stylesheet" href="style.css?v=57" />
   </head>
   <body data-view="setup">
     <div class="app">
@@ -120,6 +120,12 @@
               </button>
             </div>
           </div>
+          <div id="setsBar" class="sets-bar" hidden>
+            <span class="sets-bar-label">Sets</span>
+            <button id="decSetsBtn" type="button" class="ghost mini" title="Remove last set" disabled>−</button>
+            <span id="setsCountLabel">1 Set</span>
+            <button id="incSetsBtn" type="button" class="ghost mini" title="Add another set">+</button>
+          </div>
           <div id="output" class="output"></div>
         </section>
       </main>
@@ -140,6 +146,6 @@
     <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="false"></div>
     <div id="dialogHost"></div>
 
-    <script src="app.js?v=69"></script>
+    <script src="app.js?v=71"></script>
   </body>
 </html>
