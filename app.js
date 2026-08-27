@@ -861,7 +861,27 @@ function createMatchState(topTeam, bottomTeam, targetScore = 11) {
     bottomPositions: { left: bottomTeam[0], right: bottomTeam[1] },
     undoStack: [],
     finished: false,
+    startedAt: null,
+    finishedAt: null,
   };
+}
+
+/** Formats a millisecond duration as "M:SS" (or "H:MM:SS" past an hour). */
+function formatElapsed(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = hours > 0 ? String(minutes).padStart(2, "0") : String(minutes);
+  const ss = String(seconds).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/** Elapsed time for a match: running total while live, frozen once finished. */
+function matchElapsedMs(state) {
+  if (!state.startedAt) return 0;
+  const end = state.finishedAt || Date.now();
+  return Math.max(0, end - state.startedAt);
 }
 
 function shuffled(values) {
@@ -950,7 +970,12 @@ function scorePoint(state, winningTeam, topTeam, bottomTeam) {
     receiver: state.receiver,
     topPositions: { ...state.topPositions },
     bottomPositions: { ...state.bottomPositions },
+    startedAt: state.startedAt,
   });
+
+  // The clock starts the instant either team gets on the board, and runs
+  // continuously — including while the card is collapsed — until Finish.
+  if (!state.startedAt) state.startedAt = Date.now();
 
   const servingTeam = teamForPlayer(state.server, topTeam, bottomTeam);
   const servingPositions = servingTeam === "top" ? state.topPositions : state.bottomPositions;
@@ -982,6 +1007,11 @@ function scorePoint(state, winningTeam, topTeam, bottomTeam) {
 function undoScore(state) {
   const previous = state.undoStack.pop();
   if (previous && !state.finished) Object.assign(state, previous);
+}
+
+/** True while a match's clock should be actively ticking (started, not finished). */
+function matchTimerRunning(state) {
+  return Boolean(state.startedAt) && !state.finished;
 }
 
 /* --------------------------------------------------------------------------
@@ -1154,6 +1184,12 @@ function renderSchedule(session) {
     const status = statusPillFor(state, isDone);
     const started = state.topScore > 0 || state.bottomScore > 0;
     const leader = state.topScore === state.bottomScore ? "" : state.topScore > state.bottomScore ? "top" : "bottom";
+    const timerRunning = matchTimerRunning(state);
+    const timerHtml = state.startedAt
+      ? `<span class="timer-pill${timerRunning ? " is-running" : ""}" data-timer${timerRunning ? ` data-start="${state.startedAt}"` : ""}>
+           <span class="timer-pill-icon" aria-hidden="true">⏱️</span><span class="timer-pill-value">${escapeHtml(formatElapsed(matchElapsedMs(state)))}</span>
+         </span>`
+      : "";
 
     const card = document.createElement("article");
     card.className = `game${isDone ? " done" : ""}${expanded ? " expanded" : ""}`;
@@ -1161,6 +1197,7 @@ function renderSchedule(session) {
       <button type="button" class="game-summary" aria-expanded="${expanded}">
         <span class="game-top">
           <span class="game-badge"><span aria-hidden="true">🏸</span> Game ${idx + 1}</span>
+          ${timerHtml}
           <span class="score-pill${started ? " is-live" : ""}">
             <b class="${leader === "top" ? "lead" : ""}">${state.topScore}</b><i>–</i><b class="${leader === "bottom" ? "lead" : ""}">${state.bottomScore}</b>
           </span>
@@ -1258,6 +1295,12 @@ function renderSchedule(session) {
           </div>
         </div>
         <div class="court-rotate-row">
+          <div class="match-time-field">
+            <span>Match time</span>
+            ${match.startedAt
+              ? `<span class="timer-pill${timerRunning ? " is-running" : ""}" data-timer${timerRunning ? ` data-start="${match.startedAt}"` : ""}><span class="timer-pill-icon" aria-hidden="true">⏱️</span><span class="timer-pill-value">${escapeHtml(formatElapsed(matchElapsedMs(match)))}</span></span>`
+              : `<span class="match-time-empty">Starts on first point</span>`}
+          </div>
           <button type="button" class="ghost mini court-rotate-btn" ${started ? "disabled" : ""} title="Swap which team appears at each end of the court">
             <span aria-hidden="true">${match.courtFlipped ? "🔄" : "↕️"}</span> Rotate Court
           </button>
@@ -1337,6 +1380,7 @@ function renderSchedule(session) {
 
         update((current) => {
           current.finished = true;
+          current.finishedAt = Date.now();
           completedGameIndexes.add(idx);
           session.completedGameIndexes = [...completedGameIndexes];
         });
@@ -1719,6 +1763,21 @@ async function withBusyState(button, work) {
     updateNavControls(activeSession);
   }
 }
+
+/* --------------------------------------------------------------------------
+   Live game clocks
+   -------------------------------------------------------------------------- */
+
+// Ticks every second, nudging just the timer text — not a full re-render —
+// so a game's clock keeps running whether its card is expanded or collapsed.
+window.setInterval(() => {
+  document.querySelectorAll(".timer-pill.is-running[data-start]").forEach((el) => {
+    const start = Number(el.dataset.start);
+    if (!start) return;
+    const valueEl = el.querySelector(".timer-pill-value");
+    if (valueEl) valueEl.textContent = formatElapsed(Date.now() - start);
+  });
+}, 1000);
 
 /* --------------------------------------------------------------------------
    Wiring

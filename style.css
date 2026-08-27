@@ -692,6 +692,26 @@ input[type="number"]:focus {
   box-shadow: 0 14px 34px -12px #000000cc, 0 0 0 1px #21c97c33;
 }
 
+:root[data-theme="dark"] .game.done {
+  background: linear-gradient(145deg, #2c2410 0%, #17231d 58%, #0d140f 100%);
+  border-color: #e6c05a;
+}
+
+:root[data-theme="dark"] .game.done:not(.expanded) {
+  box-shadow: 0 0 0 1px rgba(230, 192, 90, 0.45), 0 0 26px 4px rgba(230, 192, 90, 0.4);
+}
+
+:root[data-theme="dark"] .game.done:hover:not(.expanded) {
+  border-color: #f0cf7a;
+  box-shadow: 0 0 0 1px rgba(230, 192, 90, 0.6), 0 0 32px 6px rgba(230, 192, 90, 0.55);
+}
+
+:root[data-theme="dark"] .game.done .matchup .team.is-winner {
+  border-color: rgba(230, 192, 90, 0.5);
+  background: rgba(230, 192, 90, 0.14);
+  color: #f0cf7a;
+}
+
 :root[data-theme="dark"] .matchup .team,
 :root[data-theme="dark"] .pill,
 :root[data-theme="dark"] .stat-card,
@@ -1054,8 +1074,17 @@ button:disabled {
 }
 
 .game.done {
-  background: linear-gradient(170deg, var(--accent-soft) 0%, var(--surface) 62%);
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  background: linear-gradient(170deg, #fff3d1 0%, var(--surface) 62%);
+  border-color: #d9a92b;
+}
+
+.game.done:not(.expanded) {
+  box-shadow: 0 0 0 1px rgba(217, 169, 43, 0.4), 0 6px 26px -6px rgba(217, 169, 43, 0.55);
+}
+
+.game.done:hover:not(.expanded) {
+  border-color: #c8941a;
+  box-shadow: 0 0 0 1px rgba(217, 169, 43, 0.55), 0 8px 30px -6px rgba(217, 169, 43, 0.7);
 }
 
 /* Summary (tap target).
@@ -1110,14 +1139,56 @@ button:disabled {
 }
 
 .game.done .game-badge {
-  background: var(--accent);
-  color: #fff;
+  background: #d9a92b;
+  color: #3a2600;
 }
 
 .game-top {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.timer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.timer-pill.is-running {
+  background: var(--shuttle-soft);
+  border-color: color-mix(in srgb, var(--shuttle) 45%, transparent);
+  color: var(--shuttle-ink);
+}
+
+.timer-pill-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.game-top .timer-pill {
+  flex: 0 0 auto;
+  font-size: 14px;
+  padding: 5px 11px;
+}
+
+.game-top .timer-pill .timer-pill-icon {
+  font-size: 13px;
+}
+
+.match-time-field .timer-pill {
+  font-size: 15px;
+  padding: 5px 12px;
 }
 
 .game-top .score-pill {
@@ -1212,9 +1283,9 @@ button:disabled {
 }
 
 .game.done .matchup .team.is-winner {
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  border-color: rgba(217, 169, 43, 0.55);
+  background: rgba(217, 169, 43, 0.16);
+  color: #7a5600;
 }
 
 .game-meta {
@@ -1332,13 +1403,39 @@ button:disabled {
   justify-content: center;
 }
 
-/* Court rotate */
+/* Court rotate + match time */
 .court-rotate-row {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.match-time-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.match-time-field > span:first-child {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+
+.match-time-empty {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .court-rotate-row .court-rotate-btn {
-  flex: 1;
+  flex: 0 0 auto;
   justify-content: center;
 }
 
