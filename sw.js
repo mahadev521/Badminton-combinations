@@ -2,7 +2,7 @@
    App shell: network-first (never serve stale code), cache as fallback.
    Fonts: cache-first (they never change and matter for layout). */
 
-const CACHE = "badminton-v1";
+const CACHE = "badminton-v5";
 
 const SHELL = [
   "./",

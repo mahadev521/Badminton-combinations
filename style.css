@@ -102,6 +102,9 @@
   box-sizing: border-box;
 }
 
+/* Ensure [hidden] always wins even when a class sets display */
+[hidden] { display: none !important; }
+
 *::selection {
   background: var(--accent);
   color: #fff;
@@ -2425,6 +2428,357 @@ button:disabled {
     background: var(--surface-2);
     border-color: var(--line);
   }
+}
+
+/* ==========================================================================
+   Split panel toggle & layout
+   ========================================================================== */
+
+.split-panel {
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.split-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.split-toggle-text {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.toggle-visual {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.toggle-visual input[type="checkbox"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+  margin: 0;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--line);
+  border-radius: 13px;
+  transition: background var(--dur) var(--ease);
+}
+
+.toggle-track::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  top: 3px;
+  left: 3px;
+  transition: transform var(--dur) var(--ease);
+  box-shadow: 0 1px 3px #0005;
+}
+
+.toggle-visual input:checked ~ .toggle-track { background: var(--accent); }
+.toggle-visual input:checked ~ .toggle-track::after { transform: translateX(18px); }
+
+.split-body {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.split-price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.split-price-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.split-hint {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 8px 0 2px;
+}
+
+.split-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+:root[data-theme="dark"] .split-panel {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+:root[data-theme="dark"] .split-body {
+  border-color: var(--line);
+}
+
+:root[data-theme="dark"] .toggle-track { background: var(--surface-3); }
+:root[data-theme="dark"] .toggle-track::after { background: var(--muted); }
+:root[data-theme="dark"] .toggle-visual input:checked ~ .toggle-track { background: var(--accent); }
+:root[data-theme="dark"] .toggle-visual input:checked ~ .toggle-track::after { background: var(--ink); }
+
+/* ==========================================================================
+   Price input (used inside split panel)
+   ========================================================================== */
+
+.price-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.price-symbol {
+  position: absolute;
+  left: 14px;
+  font-size: 14px;
+  color: var(--muted);
+  pointer-events: none;
+  user-select: none;
+}
+
+.price-input-wrap input[type="number"] {
+  padding-left: 30px;
+  width: 130px;
+}
+
+.price-input-wrap input[type="number"]::-webkit-inner-spin-button,
+.price-input-wrap input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* ==========================================================================
+   Session timer bar (play panel)
+   ========================================================================== */
+
+.session-timer-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+  color: var(--accent-ink);
+}
+
+.session-timer-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.session-timer-label {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.session-timer-value {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-timer-bar.is-ended {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.session-timer-bar.is-ended .session-timer-value {
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .session-timer-bar {
+  background: var(--accent-soft);
+  border-color: var(--line-soft);
+  color: var(--accent-ink);
+}
+
+:root[data-theme="dark"] .session-timer-bar.is-ended {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   End Today's Session panel + split summary
+   ========================================================================== */
+
+.end-session-panel {
+  margin-top: 4px;
+  padding: 16px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.end-session-btn {
+  width: 100%;
+  padding: 13px 20px;
+  border-radius: var(--r-md);
+  background: var(--error);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px -2px #c62f2640;
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.end-session-btn:hover:not(:disabled) {
+  background: #a82620;
+}
+
+.end-session-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.end-session-btn.is-ended {
+  background: var(--surface-2);
+  color: var(--muted);
+  box-shadow: none;
+  cursor: default;
+}
+
+:root[data-theme="dark"] .end-session-btn {
+  background: var(--error);
+}
+
+:root[data-theme="dark"] .end-session-btn:hover:not(:disabled) {
+  background: #c23830;
+}
+
+:root[data-theme="dark"] .end-session-btn.is-ended {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.split-summary {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 14px;
+}
+
+.split-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.split-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--ink);
+}
+
+.split-share-btn {
+  flex-shrink: 0;
+}
+
+.split-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+.split-meta span {
+  white-space: nowrap;
+}
+
+.split-table .split-amount {
+  font-weight: 700;
+  color: var(--accent-ink);
+  text-align: right;
+}
+
+.wl-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.split-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--muted);
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.split-total-row strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] .split-table .split-amount {
+  color: var(--accent-ink);
+}
+
+:root[data-theme="dark"] .end-session-panel {
+  background: var(--surface-2);
+}
+
+:root[data-theme="dark"] .split-title {
+  color: var(--ink);
 }
 
 @media (prefers-reduced-motion: reduce) {

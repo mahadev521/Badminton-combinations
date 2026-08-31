@@ -22,7 +22,7 @@ const LEGACY_SEASON_KEY = "badmintonSeasonState";
 const INPUTS_STORAGE_KEY = "badmintonInputs";
 const KNOWN_PLAYERS_KEY = "badmintonKnownPlayers";
 const THEME_STORAGE_KEY = "badmintonTheme";
-const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 function playersKey(players) {
   return [...players].sort().join("|");
@@ -40,6 +40,10 @@ function newSession(players, courtView = "end") {
     initialComboOrder: null,
     setsCount: 1,
     setBreaks: [0],
+    courtPrice: 0,
+    sessionEndedAt: null,
+    splitEnabled: false,
+    defaultTargetScore: 11,
     updatedAt: Date.now(),
   };
 }
@@ -61,6 +65,10 @@ function loadSession(players) {
     if (!Array.isArray(state.completedGameIndexes)) state.completedGameIndexes = [];
     if (!state.setsCount) state.setsCount = 1;
     if (!Array.isArray(state.setBreaks)) state.setBreaks = [0];
+    if (!state.courtPrice) state.courtPrice = 0;
+    if (state.sessionEndedAt === undefined) state.sessionEndedAt = null;
+    if (state.splitEnabled === undefined) state.splitEnabled = false;
+    if (!state.defaultTargetScore) state.defaultTargetScore = 11;
     return state;
   } catch {
     return null;
@@ -1061,20 +1069,141 @@ function renderEmptyState(message = "No schedule yet") {
   `;
 }
 
+/** Earliest startedAt across all match states — the moment the session clock began. */
+function getSessionStartedAt(session) {
+  let earliest = null;
+  for (const state of Object.values(session.matchStates || {})) {
+    if (state.startedAt && (earliest === null || state.startedAt < earliest)) {
+      earliest = state.startedAt;
+    }
+  }
+  return earliest;
+}
+
+/**
+ * Compute a cost split for the session.
+ * Each player is billed in whole hours (min 1) proportional to games played.
+ * Their share = (billed_hours / total_billed_hours) × court_price.
+ */
+function computeSplit(session) {
+  const startedAt = getSessionStartedAt(session);
+  if (!startedAt) return null;
+
+  const endedAt = session.sessionEndedAt || Date.now();
+  const sessionHours = Math.max(1 / 60, (endedAt - startedAt) / 3600000);
+
+  const completedSet = new Set(session.completedGameIndexes);
+  const playerGameCounts = new Map(session.players.map((p) => [p, 0]));
+
+  for (const idx of completedSet) {
+    const game = session.schedule[idx];
+    if (!game) continue;
+    for (const p of [...game[0], ...game[1]]) {
+      playerGameCounts.set(p, (playerGameCounts.get(p) || 0) + 1);
+    }
+  }
+
+  const totalCompletedGames = completedSet.size;
+  const gamesPerHour = sessionHours > 0 ? totalCompletedGames / sessionHours : 0;
+
+  const billedHours = new Map();
+  for (const [player, games] of playerGameCounts) {
+    if (games === 0) {
+      billedHours.set(player, 0);
+    } else if (gamesPerHour <= 0) {
+      billedHours.set(player, 1);
+    } else {
+      billedHours.set(player, Math.max(1, Math.ceil(games / gamesPerHour)));
+    }
+  }
+
+  const totalBilledHours = [...billedHours.values()].reduce((a, b) => a + b, 0);
+  const courtPrice = session.courtPrice || 0;
+
+  const splits = session.players
+    .map((player) => {
+      const games = playerGameCounts.get(player) || 0;
+      const hours = billedHours.get(player) || 0;
+      const share = totalBilledHours > 0 && hours > 0 ? (hours / totalBilledHours) * courtPrice : 0;
+      return { player, games, hours, share };
+    })
+    .filter((s) => s.games > 0);
+
+  return { startedAt, endedAt, sessionHours, totalCompletedGames, gamesPerHour, totalBilledHours, courtPrice, splits };
+}
+
+function renderSplitSummaryHtml(split) {
+  if (!split || !split.splits.length) return "";
+
+  const hasCost = split.courtPrice > 0;
+  const startStr = new Date(split.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const endStr = new Date(split.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const duration = formatElapsed(split.endedAt - split.startedAt);
+
+  const rows = split.splits
+    .map(
+      ({ player, games, hours, share }) => `
+      <tr>
+        <td>${escapeHtml(player)}</td>
+        <td>${games}</td>
+        <td>${hours} hr${hours !== 1 ? "s" : ""}</td>
+        ${hasCost ? `<td class="split-amount">\u20b9${Math.round(share)}</td>` : ""}
+      </tr>`
+    )
+    .join("");
+
+  return `
+    <div class="split-summary">
+      <div class="split-summary-head">
+        <h3 class="split-title"><span aria-hidden="true">\u{1F4B0}</span> Cost Split</h3>
+        <button type="button" class="ghost mini split-share-btn" aria-label="Share cost split"><span aria-hidden="true">\u{1F4E4}</span> Share</button>
+      </div>
+      <div class="split-meta">
+        <span>\u{1F558} ${escapeHtml(startStr)} \u2013 ${escapeHtml(endStr)}</span>
+        <span>\u23F1\uFE0F ${escapeHtml(duration)}</span>
+        <span>\u{1F3F8} ${split.totalCompletedGames} game${split.totalCompletedGames !== 1 ? "s" : ""}</span>
+      </div>
+      <table class="stat-table split-table">
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th>Games</th>
+            <th>Hours</th>
+            ${hasCost ? "<th>Share</th>" : ""}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${hasCost ? `<p class="split-total-row"><span>Total court cost</span><strong>\u20b9${split.courtPrice}</strong></p>` : ""}
+    </div>
+  `;
+}
+
 /** Tallies games-played and partner counts for a built schedule. */
-function computeScheduleStats(schedule, players) {
+function computeScheduleStats(schedule, players, matchStates = {}, completedSet = new Set()) {
   const playerGames = new Map(players.map((p) => [p, 0]));
+  const playerWins  = new Map(players.map((p) => [p, 0]));
+  const playerLosses = new Map(players.map((p) => [p, 0]));
   const partnerCount = new Map();
 
-  for (const [team1, team2] of schedule) {
+  for (let idx = 0; idx < schedule.length; idx++) {
+    const [team1, team2] = schedule[idx];
     for (const p of [...team1, ...team2]) {
       playerGames.set(p, (playerGames.get(p) || 0) + 1);
     }
     partnerCount.set(pairKey(team1), (partnerCount.get(pairKey(team1)) || 0) + 1);
     partnerCount.set(pairKey(team2), (partnerCount.get(pairKey(team2)) || 0) + 1);
+
+    if (completedSet.has(idx) && matchStates[idx]?.finished) {
+      const state = matchStates[idx];
+      const winners = state.topScore > state.bottomScore ? team1 : team2;
+      const losers  = state.topScore > state.bottomScore ? team2 : team1;
+      for (const p of winners) playerWins.set(p,   (playerWins.get(p)   || 0) + 1);
+      for (const p of losers)  playerLosses.set(p, (playerLosses.get(p) || 0) + 1);
+    }
   }
 
-  return { playerGames, partnerCount };
+  return { playerGames, playerWins, playerLosses, partnerCount };
 }
 
 /** Bigger, more legible cells for small groups; shrinks gracefully as the group grows. */
@@ -1156,7 +1285,9 @@ function renderSchedule(session) {
   const completedGameIndexes = new Set(session.completedGameIndexes);
   if (!session.matchStates) session.matchStates = {};
 
-  const { playerGames, partnerCount } = computeScheduleStats(schedule, players);
+  const { playerGames, playerWins, playerLosses, partnerCount } = computeScheduleStats(
+    schedule, players, session.matchStates, completedGameIndexes
+  );
 
   schedule.forEach(([team1, team2], idx) => {
     // Insert a visual divider at the start of every set after the first
@@ -1174,7 +1305,7 @@ function renderSchedule(session) {
 
     let state = session.matchStates[idx];
     if (!state) {
-      state = createMatchState(team1, team2);
+      state = createMatchState(team1, team2, session.defaultTargetScore || 11);
       session.matchStates[idx] = state;
     }
     initializeMatchState(state, team1, team2, idx, session);
@@ -1434,8 +1565,11 @@ function renderSchedule(session) {
 
   const rows = players
     .map((p) => {
-      const games = playerGames.get(p) || 0;
-      return `<tr><td>${escapeHtml(p)}</td><td>${games}</td><td>${schedule.length - games}</td></tr>`;
+      const games  = playerGames.get(p)  || 0;
+      const wins   = playerWins.get(p)   || 0;
+      const losses = playerLosses.get(p) || 0;
+      const wl = wins + losses > 0 ? `${wins}W · ${losses}L` : "—";
+      return `<tr><td>${escapeHtml(p)}</td><td>${games}</td><td>${schedule.length - games}</td><td class="wl-cell">${wl}</td></tr>`;
     })
     .join("");
 
@@ -1451,7 +1585,7 @@ function renderSchedule(session) {
         <div class="stat-card${repeated === 0 ? " is-good" : ""}"><span class="value">${repeated}</span><span class="label">Repeat pairs</span></div>
       </div>
       <table class="stat-table">
-        <thead><tr><th>Player</th><th>Games</th><th>Rest</th></tr></thead>
+        <thead><tr><th>Player</th><th>Games</th><th>Rest</th><th>W / L</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <p class="stat-note${spread === 0 ? " is-good" : ""}">
@@ -1463,6 +1597,63 @@ function renderSchedule(session) {
     </div>
   `;
   output.appendChild(stat);
+
+  // Compute once — used by both the split panel and the timer bar below
+  const sessionStartedAt = getSessionStartedAt(session);
+
+  // Sync the static split panel
+  const splitPanel = document.getElementById("splitPanel");
+  const splitToggleEl = document.getElementById("splitToggle");
+  const splitBodyEl = document.getElementById("splitBody");
+  const splitPriceEl = document.getElementById("splitPriceInput");
+  const splitActionsEl = document.getElementById("splitActions");
+
+  if (splitPanel) {
+    splitPanel.hidden = false;
+    if (splitToggleEl) splitToggleEl.checked = Boolean(session.splitEnabled);
+    if (splitBodyEl) splitBodyEl.hidden = !session.splitEnabled;
+
+    if (session.splitEnabled && splitPriceEl && document.activeElement !== splitPriceEl) {
+      splitPriceEl.value = session.courtPrice || "";
+    }
+
+    if (session.splitEnabled && splitActionsEl) {
+      const isEnded = Boolean(session.sessionEndedAt);
+      if (sessionStartedAt || isEnded) {
+        splitActionsEl.innerHTML = `
+          <button type="button" class="end-session-btn${isEnded ? " is-ended" : ""}" ${isEnded ? "disabled" : ""}>
+            <span aria-hidden="true">${isEnded ? "🔒" : "🏁"}</span>
+            ${isEnded ? "Session Ended" : "End Today's Session"}
+          </button>
+          ${isEnded ? renderSplitSummaryHtml(computeSplit(session)) : ""}
+        `;
+      } else {
+        splitActionsEl.innerHTML = `<p class="split-hint">Score a point first to enable session end.</p>`;
+      }
+    } else if (splitActionsEl) {
+      splitActionsEl.innerHTML = "";
+    }
+  }
+
+  // Sync the session timer bar visibility + running state
+  const timerBar = document.getElementById("sessionTimerBar");
+  const timerValueEl = document.getElementById("sessionTimerValue");
+  if (timerBar && timerValueEl) {
+    if (sessionStartedAt) {
+      const ended = session.sessionEndedAt;
+      timerBar.hidden = false;
+      timerBar.classList.toggle("is-ended", Boolean(ended));
+      timerValueEl.textContent = formatElapsed((ended || Date.now()) - sessionStartedAt);
+      if (ended) {
+        timerValueEl.removeAttribute("data-session-start");
+      } else {
+        timerValueEl.setAttribute("data-session-start", String(sessionStartedAt));
+      }
+    } else {
+      timerBar.hidden = true;
+      timerValueEl.removeAttribute("data-session-start");
+    }
+  }
 
   resetBtn.disabled = schedule.length === 0;
   resetBtn.onclick = async () => {
@@ -1573,6 +1764,9 @@ function updateNavControls(session) {
     : '<span aria-hidden="true">🏸</span> Start Session';
   regenerateBtn.disabled = !active;
   courtViewChoices.forEach((choice) => {
+    choice.disabled = active;
+  });
+  document.querySelectorAll('input[name="gameTarget"]').forEach((choice) => {
     choice.disabled = active;
   });
 
@@ -1777,6 +1971,13 @@ window.setInterval(() => {
     const valueEl = el.querySelector(".timer-pill-value");
     if (valueEl) valueEl.textContent = formatElapsed(Date.now() - start);
   });
+
+  // Session timer in the play panel header
+  const sessionTimerEl = document.getElementById("sessionTimerValue");
+  if (sessionTimerEl) {
+    const start = Number(sessionTimerEl.getAttribute("data-session-start"));
+    if (start) sessionTimerEl.textContent = formatElapsed(Date.now() - start);
+  }
 }, 1000);
 
 /* --------------------------------------------------------------------------
@@ -1839,6 +2040,7 @@ document.getElementById("startBtn").addEventListener("click", async () => {
   renderKnownPlayerChips();
 
   const session = newSession(players, selectedCourtView());
+  session.defaultTargetScore = Number(document.querySelector('input[name="gameTarget"]:checked')?.value) || 11;
   await withBusyState(startBtn, () => buildSchedule(session));
 });
 
@@ -1846,6 +2048,82 @@ document.getElementById("playersInput").addEventListener("input", () => {
   updateLineUpMeta();
   const errorText = document.getElementById("errorText");
   if (errorText.textContent) errorText.textContent = "";
+});
+
+document.getElementById("splitToggle").addEventListener("change", () => {
+  if (!activeSession) return;
+  activeSession.splitEnabled = document.getElementById("splitToggle").checked;
+  saveSession(activeSession);
+  showSession(activeSession);
+});
+
+document.getElementById("splitPriceInput").addEventListener("input", () => {
+  if (!activeSession) return;
+  activeSession.courtPrice = Number(document.getElementById("splitPriceInput").value) || 0;
+  saveSession(activeSession);
+  // Update split amounts live without a full re-render (keeps input focused)
+  if (activeSession.sessionEndedAt) {
+    const splitActionsEl = document.getElementById("splitActions");
+    if (splitActionsEl) {
+      splitActionsEl.innerHTML = `
+        <button type="button" class="end-session-btn is-ended" disabled>
+          <span aria-hidden="true">🔒</span> Session Ended
+        </button>
+        ${renderSplitSummaryHtml(computeSplit(activeSession))}
+      `;
+    }
+  }
+});
+
+// Event delegation for split actions panel (share button + end session button)
+document.getElementById("splitActions").addEventListener("click", async (event) => {
+  // Share button — uses Web Share API or clipboard fallback
+  if (event.target.closest(".split-share-btn") && activeSession) {
+    const split = computeSplit(activeSession);
+    if (!split) return;
+    const hasCost = split.courtPrice > 0;
+    const startStr = new Date(split.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const endStr   = new Date(split.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const duration = formatElapsed(split.endedAt - split.startedAt);
+    const text = [
+      "🏸 Badminton Cost Split",
+      `🕐 ${startStr} – ${endStr} (${duration})`,
+      `🏸 ${split.totalCompletedGames} games played`,
+      "",
+      ...split.splits.map(({ player, games, hours, share }) =>
+        `${player}  ${games}g  ${hours}h${hasCost ? `  ₹${Math.round(share)}` : ""}`
+      ),
+      ...(hasCost ? ["", `Total: ₹${split.courtPrice}`] : []),
+    ].join("\n");
+    if (navigator.share) {
+      navigator.share({ text }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(text).then(
+        () => toast("Split copied to clipboard", "📋"),
+        () => toast("Couldn't copy — please copy manually", "⚠️", 3000)
+      );
+    }
+    return;
+  }
+
+  // End session button
+  const btn = event.target.closest(".end-session-btn:not([disabled])");
+  if (!btn || !activeSession) return;
+  const doneCount = activeSession.completedGameIndexes.length;
+  const ok = await confirmDialog({
+    title: "End today's session?",
+    message: doneCount > 0
+      ? `Records the end time and calculates the cost split for ${doneCount} completed game${doneCount === 1 ? "" : "s"}.`
+      : "No games completed yet — end the session anyway?",
+    confirmLabel: "End Session",
+    emoji: "🏁",
+  });
+  if (!ok) return;
+  activeSession.sessionEndedAt = Date.now();
+  saveSession(activeSession);
+  showSession(activeSession);
+  haptic([10, 50, 10]);
+  toast("Session ended · cost split ready", "🏁", 3200);
 });
 
 document.getElementById("knownPlayersChips").addEventListener("click", (event) => {
@@ -1889,6 +2167,15 @@ document.getElementById("resetSeasonBtn").addEventListener("click", async () => 
   localStorage.removeItem(INPUTS_STORAGE_KEY);
 
   document.getElementById("playersInput").value = "";
+  const timerBarReset = document.getElementById("sessionTimerBar");
+  if (timerBarReset) timerBarReset.hidden = true;
+  const splitPanelReset = document.getElementById("splitPanel");
+  if (splitPanelReset) splitPanelReset.hidden = true;
+  document.getElementById("splitPriceInput").value = "";
+  document.getElementById("splitToggle").checked = false;
+  document.getElementById("splitActions").innerHTML = "";
+  const gameTarget11Reset = document.getElementById("gameTarget11");
+  if (gameTarget11Reset) gameTarget11Reset.checked = true;
   document.getElementById("output").innerHTML = renderEmptyState();
   renderPartnershipMapPanel(null);
 
@@ -1946,6 +2233,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
   if (session) {
     setSelectedCourtView(session.courtView || "end");
+    const targetChoice = document.querySelector(`input[name="gameTarget"][value="${session.defaultTargetScore || 11}"]`);
+    if (targetChoice) targetChoice.checked = true;
     showSession(session);
     if (isCompactLayout()) setView("play");
   } else {

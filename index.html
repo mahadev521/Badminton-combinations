@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=57" />
+    <link rel="stylesheet" href="style.css?v=61" />
   </head>
   <body data-view="setup">
     <div class="app">
@@ -90,6 +90,16 @@
             </div>
           </div>
 
+          <div class="court-view-settings">
+            <span id="gameTargetLabel" class="section-label">Game target</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="gameTargetLabel">
+              <input id="gameTarget11" name="gameTarget" type="radio" value="11" checked />
+              <label for="gameTarget11">11 pts</label>
+              <input id="gameTarget21" name="gameTarget" type="radio" value="21" />
+              <label for="gameTarget21">21 pts</label>
+            </div>
+          </div>
+
           <div class="actions primary-actions">
             <button id="startBtn" type="button" class="btn-primary btn-lg">
               <span aria-hidden="true">🏸</span> Start Session
@@ -126,7 +136,31 @@
             <span id="setsCountLabel">1 Set</span>
             <button id="incSetsBtn" type="button" class="ghost mini" title="Add another set">+</button>
           </div>
+          <div id="sessionTimerBar" class="session-timer-bar" hidden aria-live="off">
+            <span class="session-timer-icon" aria-hidden="true">⏱️</span>
+            <span class="session-timer-label">Session</span>
+            <span id="sessionTimerValue" class="session-timer-value">0:00</span>
+          </div>
           <div id="output" class="output"></div>
+          <div id="splitPanel" class="split-panel" hidden>
+            <label class="split-toggle-row">
+              <span class="split-toggle-text"><span aria-hidden="true">💸</span> Split this match?</span>
+              <span class="toggle-visual">
+                <input type="checkbox" id="splitToggle" role="switch" aria-label="Enable cost split for today" />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </span>
+            </label>
+            <div id="splitBody" class="split-body" hidden>
+              <div class="split-price-row">
+                <label for="splitPriceInput" class="split-price-label">Court price</label>
+                <div class="price-input-wrap">
+                  <span class="price-symbol" aria-hidden="true">₹</span>
+                  <input type="number" id="splitPriceInput" min="0" step="1" placeholder="0" inputmode="numeric" autocomplete="off" />
+                </div>
+              </div>
+              <div id="splitActions" class="split-actions"></div>
+            </div>
+          </div>
         </section>
       </main>
 
@@ -146,6 +180,6 @@
     <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="false"></div>
     <div id="dialogHost"></div>
 
-    <script src="app.js?v=71"></script>
+    <script src="app.js?v=75"></script>
   </body>
 </html>
