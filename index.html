@@ -179,22 +179,53 @@
         </section>
       </main>
 
-      <!-- AUTH MODAL -->
-      <div id="authModal" class="dialog-backdrop" hidden>
-        <div class="dialog" role="dialog" aria-modal="true">
-          <h3 id="authModalTitle">Cloud Account</h3>
-          <p>Sign in to save sessions and track long-term player stats.</p>
-          <form id="authForm" style="display: grid; gap: 10px;">
-            <input type="email" id="authEmail" placeholder="Email address" required />
-            <input type="password" id="authPassword" placeholder="Password" required />
-            <div class="dialog-actions">
-              <button type="submit" id="signInBtn">Log In</button>
-              <button type="button" id="signUpBtn" class="ghost">Register</button>
-            </div>
-            <button type="button" id="closeAuthBtn" class="ghost mini" style="margin-top: 6px;">Close</button>
-          </form>
-        </div>
+<!-- AUTH MODAL -->
+<div id="authModal" class="dialog-backdrop" hidden>
+  <div class="dialog auth-card" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+    <div class="auth-card-head">
+      <div class="auth-icon-badge">🏸</div>
+      <h3 id="authModalTitle">Account Access</h3>
+      <p class="subtitle">Sync match history, player balances, and career stats.</p>
+    </div>
+
+    <form id="authForm" class="auth-form" novalidate>
+      <div class="auth-field">
+        <label for="authEmail">Email Address</label>
+        <input 
+          type="email" 
+          id="authEmail" 
+          placeholder="name@example.com" 
+          autocomplete="email" 
+          required 
+        />
       </div>
+
+      <div class="auth-field">
+        <label for="authPassword">Password</label>
+        <input 
+          type="password" 
+          id="authPassword" 
+          placeholder="••••••••" 
+          autocomplete="current-password" 
+          required 
+        />
+      </div>
+
+      <div class="auth-btn-row">
+        <button type="submit" id="signInBtn" class="btn-primary auth-submit-btn">
+          Sign In
+        </button>
+        <button type="button" id="signUpBtn" class="ghost auth-alt-btn">
+          Create Account
+        </button>
+      </div>
+
+      <button type="button" id="closeAuthBtn" class="ghost mini auth-dismiss-btn">
+        Dismiss
+      </button>
+    </form>
+  </div>
+</div>
 
       <nav class="tab-bar" aria-label="Sections">
         <button type="button" class="tab" data-view="setup" aria-current="page">
