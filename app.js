@@ -2,7 +2,17 @@
    Badminton Rotation
    Scheduling engine, doubles scoring rules, and the app shell that drives them.
    ========================================================================== */
+import { 
+  getCurrentUser, 
+  signInUser, 
+  signUpUser, 
+  signOutUser, 
+  syncSessionToCloud, 
+  recordFinishedMatch, 
+  fetchLifetimeStats 
+} from "./supabase-client.js";
 
+// Keep all helper algorithms (pairKey, makeGameConfigs, generateSchedule, etc.) unchanged.
 function pairKey(team) {
   return [...team].sort().join("|");
 }
