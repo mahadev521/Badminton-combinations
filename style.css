@@ -2810,3 +2810,131 @@ button:disabled {
     box-shadow: none;
   }
 }
+
+/* ==========================================================================
+   Refined Auth Card & Modal
+   ========================================================================== */
+
+.auth-card {
+  max-width: 380px;
+  padding: 24px;
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+.auth-card-head {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.auth-icon-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 10px;
+  font-size: 22px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.auth-card-head h3 {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.auth-card-head .subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.auth-field label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.auth-field input {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 14px;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.auth-field input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.auth-btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.auth-submit-btn,
+.auth-alt-btn {
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: var(--r-md);
+  padding: 8px 12px;
+}
+
+.auth-dismiss-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  min-height: 32px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: -4px;
+}
+
+.auth-dismiss-btn:hover {
+  background: transparent;
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+:root[data-theme="dark"] .auth-icon-badge {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+:root[data-theme="dark"] .auth-field input {
+  background: #0d1410;
+  border-color: #405149;
+  color: #f0f8f3;
+}
+
+:root[data-theme="dark"] .auth-field input:focus {
+  background: #14221b;
+  border-color: var(--accent);
+}
