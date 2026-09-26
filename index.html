@@ -5,14 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Badminton Rotation</title>
     <meta name="description" content="Generate balanced badminton games with fair rests, varied partnerships, and a live court scorer." />
-
     <meta id="themeColorMeta" name="theme-color" content="#f4f6f5" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Badminton" />
-    <meta name="format-detection" content="telephone=no" />
 
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
@@ -24,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=61" />
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body data-view="setup">
     <div class="app">
@@ -36,10 +30,15 @@
             <small id="brandStatus">Fair games, every time</small>
           </span>
         </div>
-        <button id="themeToggle" type="button" class="theme-toggle" aria-label="Switch to dark theme" title="Switch to dark theme">
-          <span class="theme-icon sun" aria-hidden="true">☀️</span>
-          <span class="theme-icon moon" aria-hidden="true">🌙</span>
-        </button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button id="authModalBtn" type="button" class="ghost mini">
+            <span id="authStatusText">Sign In</span>
+          </button>
+          <button id="themeToggle" type="button" class="theme-toggle" aria-label="Switch to dark theme" title="Switch to dark theme">
+            <span class="theme-icon sun" aria-hidden="true">☀️</span>
+            <span class="theme-icon moon" aria-hidden="true">🌙</span>
+          </button>
+        </div>
       </header>
 
       <div class="progress-rail" role="presentation">
@@ -47,6 +46,7 @@
       </div>
 
       <main class="shell">
+        <!-- LINE-UP PANEL -->
         <section class="card form-card" id="setupPanel" aria-labelledby="setupHeading">
           <div class="card-head">
             <h1 id="setupHeading"><span class="head-emoji" aria-hidden="true">🧑‍🤝‍🧑</span> Line-up</h1>
@@ -63,7 +63,6 @@
           </div>
 
           <div id="knownPlayersChips" class="chips" aria-label="Saved players"></div>
-
           <p id="gamesPreview" class="field-hint games-preview" aria-live="polite">Add at least 4 players to see how many games it'll take.</p>
 
           <div id="partnershipMapPanel" class="partnership-map-panel" hidden>
@@ -115,6 +114,7 @@
           <p id="errorText" class="error" aria-live="polite" aria-atomic="true"></p>
         </section>
 
+        <!-- PLAY PANEL -->
         <section class="card output-card" id="playPanel" aria-labelledby="scheduleHeading">
           <div class="card-head output-head">
             <div>
@@ -122,7 +122,7 @@
               <p id="metaText" class="meta">Add player names, then tap Start Session.</p>
             </div>
             <div class="output-head-actions">
-              <button id="regenerateBtn" type="button" class="ghost mini" disabled title="Build a fresh schedule with the current settings">
+              <button id="regenerateBtn" type="button" class="ghost mini" disabled title="Build a fresh schedule">
                 <span aria-hidden="true">🎲</span> Regenerate
               </button>
               <button id="resetCurrentSetBtn" type="button" class="ghost mini danger" disabled title="Clear all scores">
@@ -130,23 +130,27 @@
               </button>
             </div>
           </div>
+
           <div id="setsBar" class="sets-bar" hidden>
             <span class="sets-bar-label">Sets</span>
-            <button id="decSetsBtn" type="button" class="ghost mini" title="Remove last set" disabled>−</button>
+            <button id="decSetsBtn" type="button" class="ghost mini" disabled>−</button>
             <span id="setsCountLabel">1 Set</span>
-            <button id="incSetsBtn" type="button" class="ghost mini" title="Add another set">+</button>
+            <button id="incSetsBtn" type="button" class="ghost mini">+</button>
           </div>
-          <div id="sessionTimerBar" class="session-timer-bar" hidden aria-live="off">
+
+          <div id="sessionTimerBar" class="session-timer-bar" hidden>
             <span class="session-timer-icon" aria-hidden="true">⏱️</span>
             <span class="session-timer-label">Session</span>
             <span id="sessionTimerValue" class="session-timer-value">0:00</span>
           </div>
+
           <div id="output" class="output"></div>
+
           <div id="splitPanel" class="split-panel" hidden>
             <label class="split-toggle-row">
               <span class="split-toggle-text"><span aria-hidden="true">💸</span> Split this match?</span>
               <span class="toggle-visual">
-                <input type="checkbox" id="splitToggle" role="switch" aria-label="Enable cost split for today" />
+                <input type="checkbox" id="splitToggle" role="switch" />
                 <span class="toggle-track" aria-hidden="true"></span>
               </span>
             </label>
@@ -155,14 +159,42 @@
                 <label for="splitPriceInput" class="split-price-label">Court price</label>
                 <div class="price-input-wrap">
                   <span class="price-symbol" aria-hidden="true">₹</span>
-                  <input type="number" id="splitPriceInput" min="0" step="1" placeholder="0" inputmode="numeric" autocomplete="off" />
+                  <input type="number" id="splitPriceInput" min="0" step="1" placeholder="0" inputmode="numeric" />
                 </div>
               </div>
               <div id="splitActions" class="split-actions"></div>
             </div>
           </div>
         </section>
+
+        <!-- STATS PANEL -->
+        <section class="card stats-card" id="statsPanel" hidden>
+          <div class="card-head">
+            <h2><span class="head-emoji" aria-hidden="true">📈</span> Career Stats</h2>
+            <p class="subtitle">Aggregated metrics stored in your Supabase account.</p>
+          </div>
+          <div id="statsContent">
+            <p class="field-hint">Sign in to view synced career win rates and point totals.</p>
+          </div>
+        </section>
       </main>
+
+      <!-- AUTH MODAL -->
+      <div id="authModal" class="dialog-backdrop" hidden>
+        <div class="dialog" role="dialog" aria-modal="true">
+          <h3 id="authModalTitle">Cloud Account</h3>
+          <p>Sign in to save sessions and track long-term player stats.</p>
+          <form id="authForm" style="display: grid; gap: 10px;">
+            <input type="email" id="authEmail" placeholder="Email address" required />
+            <input type="password" id="authPassword" placeholder="Password" required />
+            <div class="dialog-actions">
+              <button type="submit" id="signInBtn">Log In</button>
+              <button type="button" id="signUpBtn" class="ghost">Register</button>
+            </div>
+            <button type="button" id="closeAuthBtn" class="ghost mini" style="margin-top: 6px;">Close</button>
+          </form>
+        </div>
+      </div>
 
       <nav class="tab-bar" aria-label="Sections">
         <button type="button" class="tab" data-view="setup" aria-current="page">
@@ -174,12 +206,16 @@
           <span class="tab-label">Play</span>
           <span id="tabBadge" class="tab-badge" hidden></span>
         </button>
+        <button type="button" class="tab" data-view="stats">
+          <span class="tab-icon" aria-hidden="true">📈</span>
+          <span class="tab-label">Stats</span>
+        </button>
       </nav>
     </div>
 
-    <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="false"></div>
+    <div id="toastHost" class="toast-host"></div>
     <div id="dialogHost"></div>
 
-    <script src="app.js?v=75"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>
