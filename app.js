@@ -88,6 +88,7 @@ function loadSession(players) {
 function saveSession(state) {
   state.updatedAt = Date.now();
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
+  syncSessionToCloud(state).catch(() => {});
 }
 
 function clearSession() {
@@ -1512,33 +1513,36 @@ function renderSchedule(session) {
       });
 
       scorer.querySelector(".finish-btn").addEventListener("click", () => {
-        const active = session.matchStates[idx];
-        if (!active || !gameComplete(active) || active.finished) return;
+  const active = session.matchStates[idx];
+  if (!active || !gameComplete(active) || active.finished) return;
 
-        const winners = active.topScore > active.bottomScore ? team1 : team2;
-        const high = Math.max(active.topScore, active.bottomScore);
-        const low = Math.min(active.topScore, active.bottomScore);
+  const winners = active.topScore > active.bottomScore ? team1 : team2;
+  const high = Math.max(active.topScore, active.bottomScore);
+  const low = Math.min(active.topScore, active.bottomScore);
 
-        update((current) => {
-          current.finished = true;
-          current.finishedAt = Date.now();
-          completedGameIndexes.add(idx);
-          session.completedGameIndexes = [...completedGameIndexes];
-        });
+  update((current) => {
+    current.finished = true;
+    current.finishedAt = Date.now();
+    completedGameIndexes.add(idx);
+    session.completedGameIndexes = [...completedGameIndexes];
+  });
 
-        haptic([14, 50, 20]);
-        celebrate();
-        toast(`${winners.join(" + ")} win ${high}–${low}`, "🏆", 3200);
+  // Record to Supabase
+  recordFinishedMatch(idx, team1, team2, active.topScore, active.bottomScore).catch(() => {});
 
-        const nextIdx = schedule.findIndex((_, i) => !completedGameIndexes.has(i));
-        window.setTimeout(() => {
-          session.expandedGameIndex = nextIdx >= 0 ? nextIdx : null;
-          saveSession(session);
-          showSession(session);
-          if (nextIdx >= 0) scrollToExpandedGame();
-          else toast("Every game played — nice session", "🎉", 4000);
-        }, 1150);
-      });
+  haptic([14, 50, 20]);
+  celebrate();
+  toast(`${winners.join(" + ")} win ${high}–${low}`, "🏆", 3200);
+
+  const nextIdx = schedule.findIndex((_, i) => !completedGameIndexes.has(i));
+  window.setTimeout(() => {
+    session.expandedGameIndex = nextIdx >= 0 ? nextIdx : null;
+    saveSession(session);
+    showSession(session);
+    if (nextIdx >= 0) scrollToExpandedGame();
+    else toast("Every game played — nice session", "🎉", 4000);
+  }, 1150);
+});
 
       card.appendChild(scorer);
     }
@@ -2263,3 +2267,111 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     });
   });
 }
+
+// Auth UI handlers
+const authModal = document.getElementById("authModal");
+const authModalBtn = document.getElementById("authModalBtn");
+const authStatusText = document.getElementById("authStatusText");
+const authForm = document.getElementById("authForm");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+
+async function refreshAuthState() {
+  const user = await getCurrentUser();
+  if (user) {
+    authStatusText.textContent = user.email.split("@")[0];
+  } else {
+    authStatusText.textContent = "Sign In";
+  }
+}
+
+authModalBtn.addEventListener("click", async () => {
+  const user = await getCurrentUser();
+  if (user) {
+    const ok = await confirmDialog({
+      title: "Log out?",
+      message: `Signed in as ${user.email}`,
+      confirmLabel: "Log Out",
+      danger: true,
+    });
+    if (ok) {
+      await signOutUser();
+      await refreshAuthState();
+      toast("Logged out", "👋");
+    }
+  } else {
+    authModal.hidden = false;
+  }
+});
+
+document.getElementById("closeAuthBtn").addEventListener("click", () => {
+  authModal.hidden = true;
+});
+
+authForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await signInUser(authEmail.value, authPassword.value);
+    authModal.hidden = true;
+    await refreshAuthState();
+    toast("Signed in", "✅");
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById("signUpBtn").addEventListener("click", async () => {
+  try {
+    await signUpUser(authEmail.value, authPassword.value);
+    alert("Sign-up link sent! Please verify your email.");
+    authModal.hidden = true;
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+// Stats view rendering
+async function renderLifetimeStats() {
+  const statsDiv = document.getElementById("statsContent");
+  statsDiv.innerHTML = "<p>Loading lifetime records…</p>";
+
+  const stats = await fetchLifetimeStats();
+  const entries = Object.entries(stats);
+  if (!entries.length) {
+    statsDiv.innerHTML = "<p class='field-hint'>No games saved to this account yet.</p>";
+    return;
+  }
+
+  const rows = entries
+    .map(([player, s]) => {
+      const winRate = s.played ? Math.round((s.won / s.played) * 100) : 0;
+      return `<tr><td>${escapeHtml(player)}</td><td>${s.played}</td><td>${s.won}</td><td>${winRate}%</td><td>${s.pointsScored}</td></tr>`;
+    })
+    .join("");
+
+  statsDiv.innerHTML = `
+    <table class="stat-table">
+      <thead>
+        <tr><th>Player</th><th>Played</th><th>Won</th><th>Win %</th><th>Pts</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+// Modify setView to handle the Stats tab
+const originalSetView = setView;
+setView = function (view) {
+  originalSetView(view);
+  const statsPanel = document.getElementById("statsPanel");
+  if (view === "stats") {
+    statsPanel.hidden = false;
+    document.getElementById("setupPanel").style.display = "none";
+    document.getElementById("playPanel").style.display = "none";
+    renderLifetimeStats();
+  } else {
+    statsPanel.hidden = true;
+  }
+};
+
+refreshAuthState();
